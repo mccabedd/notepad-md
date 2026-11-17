@@ -15,11 +15,12 @@
         "height": 760,
         "minWidth": 480,
         "minHeight": 360,
-        "dragDropEnabled": false
+        "dragDropEnabled": true,
+        "visible": false
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' https: data:"
     }
   },
   "bundle": {

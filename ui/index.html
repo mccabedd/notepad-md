@@ -6,7 +6,13 @@
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="tabbar" class="tabbar hidden"></div>
+  <div class="tabbar-wrap">
+    <div id="tabbar" class="tabbar"></div>
+    <div id="tab-scroll" class="tab-scroll hidden">
+      <button data-dir="-1" title="Scroll tabs left">&#8249;</button>
+      <button data-dir="1" title="Scroll tabs right">&#8250;</button>
+    </div>
+  </div>
 
   <div id="toolbar" class="toolbar hidden">
     <div class="tb-group">
@@ -65,41 +71,208 @@
     </div>
   </div>
 
-  <div id="find-bar" class="find-bar hidden">
-    <input id="find-input" type="text" placeholder="Find" />
-    <input id="replace-input" type="text" placeholder="Replace" />
-    <button id="find-prev" title="Previous match">&#8593;</button>
-    <button id="find-next" title="Next match">&#8595;</button>
-    <button id="replace-one" title="Replace this match">Replace</button>
-    <button id="replace-all" title="Replace all matches">Replace All</button>
-    <span id="find-status"></span>
-    <button id="find-close" title="Close">&#10005;</button>
+  <div class="main-area">
+    <div class="workspace" id="workspace">
+      <div class="editor-pane" id="editor-pane">
+        <div class="line-numbers hidden" id="line-numbers"></div>
+        <div class="editor-wrap">
+          <pre id="editor-highlight" class="editor-highlight" aria-hidden="true"></pre>
+          <textarea id="editor" class="editor" spellcheck="false" placeholder="Start typing..."></textarea>
+        </div>
+      </div>
+      <div class="resizer" id="resizer"></div>
+      <div class="preview-pane" id="preview-pane">
+        <div class="line-numbers hidden" id="line-numbers-preview"></div>
+        <div id="preview" class="preview" contenteditable="true" spellcheck="false"></div>
+      </div>
+    </div>
+
+    <div class="sidebar" id="sidebar">
+      <button data-layout="edit-only" title="Edit Only (Ctrl+Alt+1)">
+        <svg viewBox="0 0 18 18" width="18" height="18"><rect x="2" y="3" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 6.5h9M4.5 9h6.5M4.5 11.5h8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+      </button>
+      <button data-layout="preview-only" title="Preview Only (Ctrl+Alt+2)">
+        <svg viewBox="0 0 18 18" width="18" height="18"><rect x="2" y="3" width="14" height="12" rx="1.5" fill="currentColor" fill-opacity="0.35" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+      <button data-layout="split-ep" title="Edit Left / Preview Right (Ctrl+Alt+3)">
+        <svg viewBox="0 0 18 18" width="18" height="18"><rect x="9" y="3" width="7" height="12" rx="1.5" fill="currentColor" fill-opacity="0.35"/><rect x="2" y="3" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M9 3v12" stroke="currentColor" stroke-width="1.2"/><path d="M3.8 6.5h3.4M3.8 9h2.4M3.8 11.5h3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+      </button>
+      <button data-layout="split-pe" title="Preview Left / Edit Right (Ctrl+Alt+4)">
+        <svg viewBox="0 0 18 18" width="18" height="18"><rect x="2" y="3" width="7" height="12" rx="1.5" fill="currentColor" fill-opacity="0.35"/><rect x="2" y="3" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M9 3v12" stroke="currentColor" stroke-width="1.2"/><path d="M10.8 6.5h3.4M10.8 9h2.4M10.8 11.5h3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+      </button>
+      <span class="sidebar-sep"></span>
+      <!-- Preview mode for this tab: Markdown <-> BBCode (label shows the current mode). -->
+      <button id="preview-mode-btn" class="mode-btn" title="Preview mode for this tab">MD</button>
+    </div>
   </div>
 
-  <div class="workspace" id="workspace">
-    <div class="editor-pane" id="editor-pane">
-      <div class="line-numbers hidden" id="line-numbers"></div>
-      <textarea id="editor" class="editor" spellcheck="false" placeholder="Start typing Markdown..."></textarea>
+  <!-- Advanced find: a resizable, Timeline-style list of lines above the find bar. -->
+  <div id="adv-splitter" class="adv-splitter hidden" title="Drag to resize"></div>
+  <div id="adv-pane" class="adv-pane hidden">
+    <div class="adv-head">
+      <span class="adv-title">Advanced Find</span>
+      <span class="adv-desc">Lines matching the filters &middot; click a row to jump to it, double-click or Enter to edit there, right-click for more</span>
+      <button id="adv-reset" title="Clear the filters and bring back rows you removed (bookmarks are kept)">Reset</button>
+      <button id="adv-max" title="Make the list fill the window (and back)">Maximize</button>
+      <button id="adv-close" class="adv-close" title="Close the Advanced pane (the find bar stays open)">&#10005;</button>
     </div>
-    <div class="resizer" id="resizer"></div>
-    <div class="preview-pane" id="preview-pane">
-      <div class="line-numbers hidden" id="line-numbers-preview"></div>
-      <div id="preview" class="preview" contenteditable="true" spellcheck="false"></div>
+    <div class="adv-filters">
+      <label class="adv-field">From: <input id="adv-from" type="text" placeholder="line or time" title="Line number (120 or #120) or a time: 14:30, 2024-10-14 14:30:05, 20241014. Lines without a timestamp use the one before them." /></label>
+      <label class="adv-field">To: <input id="adv-to" type="text" placeholder="line or time" title="Inclusive, to the precision typed: 14:30 covers the whole minute, a date the whole day." /></label>
+      <label class="adv-field">Find: <input id="adv-find" type="text" placeholder="term, term, ..." title="Comma-separated terms: a line is listed if it contains any of them (partial terms allowed). Tick Regex to use a regular expression instead. Same text as the Find box below." /></label>
+      <label class="adv-field">Hide: <input id="adv-hide" type="text" placeholder="term, term, ..." title="Comma-separated terms to exclude (partial terms are allowed, e.g. batt, disp)." /></label>
+      <button id="adv-clear-filters" title="Empty From, To, Find and Hide">Clear filters</button>
+      <span class="adv-sep"></span>
+      <label class="adv-check"><input id="adv-case" type="checkbox" /> Match case</label>
+      <label class="adv-check"><input id="adv-word" type="checkbox" /> Whole word</label>
+      <label class="adv-check"><input id="adv-regex" type="checkbox" /> Regex</label>
+      <label class="adv-field">In: <select id="adv-scope" title="Search the current tab or every open tab"><option value="tab">This tab</option><option value="all">All open tabs</option></select></label>
+      <span class="adv-sep"></span>
+      <label class="adv-check" title="Always list bookmarked lines, even when they don't match the filters; untick to stop"><input id="adv-add-bm" type="checkbox" /> <span id="adv-add-bm-label">Add Bookmarks</span></label>
+      <span class="adv-bm-nav">Bookmarks: <button id="adv-prev-bm" title="Move to the previous bookmarked block">&#9664; Previous</button><button id="adv-next-bm" title="Move to the next bookmarked block">Next &#9654;</button></span>
     </div>
+    <div id="adv-status" class="adv-status"></div>
+    <div id="adv-grid" class="adv-grid">
+      <div id="adv-header" class="adv-header"></div>
+      <div id="adv-body" class="adv-body" tabindex="0">
+        <div id="adv-spacer" class="adv-spacer"><div id="adv-rows" class="adv-rows"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="find-bar" class="find-bar hidden">
+    <input id="find-input" type="text" placeholder="Find" />
+    <input id="replace-input" type="text" placeholder="Replace" title="In Regex mode, $1, $2... insert captured groups" />
+    <button id="find-prev" title="Previous match (Shift+F3)">&#8593;</button>
+    <button id="find-next" title="Next match (F3)">&#8595;</button>
+    <button id="replace-one" title="Replace this match">Replace</button>
+    <button id="replace-all" title="Replace every match (in Advanced mode: only in the listed lines)">Replace All</button>
+    <label class="find-adv" title="Open the Advanced pane: line list with From/To/Find/Hide filters, regex, bookmarks (Ctrl+Shift+F)"><input id="find-advanced" type="checkbox" /> Advanced</label>
+    <span id="find-status"></span>
+    <button id="find-close" title="Close (Esc)">&#10005;</button>
   </div>
 
   <div class="statusbar">
     <span id="status-file">Untitled</span>
     <span id="status-dirty"></span>
     <span class="spacer"></span>
+    <button id="status-lang" class="status-btn">Markdown</button>
+    <button id="status-spell" class="status-btn" title="Click to switch spelling language (F7 turns spell check on/off)">English (UK)</button>
+    <button id="status-zoom" class="status-btn">100%</button>
     <span id="status-layout">Preview Only</span>
     <span id="status-theme">Light</span>
     <span id="status-count">0 characters</span>
   </div>
 
+  <div id="settings" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <span id="settings-title">Settings</span>
+        <button id="settings-close" title="Close (Esc)">&#10005;</button>
+      </div>
+      <div class="modal-body">
+        <section>
+          <h3>General</h3>
+          <label class="row">Theme <select data-s="theme"><option value="system">Follow Windows</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+          <label class="check"><input type="checkbox" data-s="restoreSession" /> Reopen my tabs (including unsaved changes) when the app starts</label>
+          <label class="check"><input type="checkbox" data-s="menuBar" /> Show menu bar <kbd>Alt</kbd></label>
+          <label class="check"><input type="checkbox" data-s="toolbar" /> Show toolbar <kbd>Ctrl+T</kbd></label>
+          <label class="check"><input type="checkbox" data-s="sidebar" /> Show sidebar <kbd>Ctrl+Shift+E</kbd></label>
+          <label class="check"><input type="checkbox" data-s="statusBar" /> Show status bar</label>
+        </section>
+        <section>
+          <h3>Editor</h3>
+          <label class="check"><input type="checkbox" data-s="lineNumbers" /> Line numbers <kbd>Ctrl+Shift+L</kbd></label>
+          <label class="check"><input type="checkbox" data-s="wordWrap" /> Word wrap <kbd>Alt+Z</kbd></label>
+          <label class="row">Tab width <select data-s="tabSize"><option value="2">2 spaces</option><option value="4">4 spaces</option><option value="8">8 spaces</option></select></label>
+          <label class="row">Font <input type="text" data-s="editFont" list="font-list" /></label>
+          <label class="row">Style <select data-s="editStyle"><option value="normal">Regular</option><option value="bold">Bold</option><option value="italic">Italic</option><option value="bold-italic">Bold Italic</option></select></label>
+          <div class="row"><span>Text colour</span> <span class="color"><input type="color" data-s="editColor" /><em data-theme-flag="editColor">theme</em><button data-clear="editColor" title="Follow the light/dark theme">Use theme</button></span></div>
+          <div class="row"><span>Background</span> <span class="color"><input type="color" data-s="editBg" /><em data-theme-flag="editBg">theme</em><button data-clear="editBg" title="Follow the light/dark theme">Use theme</button></span></div>
+          <p class="note">Syntax colours (code, Markdown markup) keep their own colours; the text colour applies to plain text.</p>
+        </section>
+        <section>
+          <h3>Preview</h3>
+          <label class="row">Font <input type="text" data-s="previewFont" list="font-list" /></label>
+          <label class="row">Style <select data-s="previewStyle"><option value="normal">Regular</option><option value="bold">Bold</option><option value="italic">Italic</option><option value="bold-italic">Bold Italic</option></select></label>
+          <div class="row"><span>Text colour</span> <span class="color"><input type="color" data-s="previewColor" /><em data-theme-flag="previewColor">theme</em><button data-clear="previewColor" title="Follow the light/dark theme">Use theme</button></span></div>
+          <div class="row"><span>Background</span> <span class="color"><input type="color" data-s="previewBg" /><em data-theme-flag="previewBg">theme</em><button data-clear="previewBg" title="Follow the light/dark theme">Use theme</button></span></div>
+        </section>
+        <section>
+          <h3>New tabs</h3>
+          <label class="row">Default view <select data-s="newTabView"><option value="edit-only">Edit Only</option><option value="preview-only">Preview Only</option><option value="split-ep">Edit Left / Preview Right</option><option value="split-pe">Preview Left / Edit Right</option><option value="same">Same as the current tab</option></select></label>
+          <label class="row">Font size <span><input type="number" data-s="newTabFontSize" min="8" max="40" step="1" /> px</span></label>
+          <p class="note">The default view is used for new tabs and for Markdown, text and BBCode files you open; code and config files always open in Edit Only. Ctrl+0 resets a tab to the default font size.</p>
+        </section>
+        <section>
+          <h3>Files</h3>
+          <div class="row"><span>Register file types</span><span class="btns"><button id="ft-register" title="Add Notepad MD to the &quot;Open with&quot; list of every supported file type (just for your Windows account)">Register</button><button id="ft-unregister" title="Remove Notepad MD from &quot;Open with&quot;">Unregister</button></span></div>
+          <p class="note" id="ft-status">Checking...</p>
+          <p class="note" id="ft-exts"></p>
+          <div class="row"><span>Make Notepad MD the default app</span><button id="ft-defaults" title="Opens Windows Settings &gt; Default apps">Open Windows Default Apps</button></div>
+          <p class="note">Windows only lets <em>you</em> choose default apps: after registering, pick Notepad MD there (or right-click a file &gt; Open with &gt; Choose another app &gt; Notepad MD &gt; Always).</p>
+        </section>
+        <section>
+          <h3>Spelling</h3>
+          <label class="check"><input type="checkbox" data-s="spellEnabled" /> Check spelling <kbd>F7</kbd></label>
+          <label class="row">Language <select data-s="spellLang"><option value="en_GB">English (UK)</option><option value="en_US">English (US)</option></select></label>
+        </section>
+      </div>
+      <div class="modal-foot">
+        <button id="settings-import" title="Load settings (and your spelling dictionary) from a file">Import...</button>
+        <button id="settings-export" title="Save these settings (and your spelling dictionary) to a file">Export...</button>
+        <button id="settings-reset" title="Put every setting on this page back to its default">Reset to defaults</button>
+        <span class="spacer" id="settings-msg"></span>
+        <button id="settings-done" class="primary">Done</button>
+      </div>
+    </div>
+  </div>
+  <div id="about" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="about-title">
+    <div class="modal-panel about-panel">
+      <div class="modal-head">
+        <span id="about-title">About</span>
+        <button id="about-close" title="Close (Esc)">&#10005;</button>
+      </div>
+      <div class="about-body">
+        <img src="app-icon.png" alt="" width="64" height="64" />
+        <div class="about-name">NotePad-MD <span id="about-version">v1.0.0</span></div>
+        <a href="https://github.com/mccabedd/notepad-md" id="about-link">https://github.com/mccabedd/notepad-md</a>
+        <div>Created by David McCabe</div>
+        <button id="about-update" class="primary">Check for Updates</button>
+        <div id="about-update-status" class="about-status"></div>
+      </div>
+    </div>
+  </div>
+
+  <datalist id="font-list">
+    <option value="Consolas"></option>
+    <option value="Cascadia Code"></option>
+    <option value="Cascadia Mono"></option>
+    <option value="Courier New"></option>
+    <option value="Lucida Console"></option>
+    <option value="Segoe UI"></option>
+    <option value="Calibri"></option>
+    <option value="Arial"></option>
+    <option value="Verdana"></option>
+    <option value="Tahoma"></option>
+    <option value="Georgia"></option>
+    <option value="Times New Roman"></option>
+    <option value="Cambria"></option>
+  </datalist>
+
+  <div id="ctx-menu" class="ctx-menu hidden"></div>
+  <div id="drop-overlay" class="drop-overlay hidden"><div>Drop files to open them</div></div>
+
   <script src="vendor/marked.min.js"></script>
   <script src="vendor/turndown.js"></script>
   <script src="vendor/turndown-plugin-gfm.js"></script>
+  <script src="vendor/highlight/highlight.min.js"></script>
+  <script src="vendor/highlight/powershell.min.js"></script>
+  <script src="vendor/highlight/dos.min.js"></script>
+  <script src="bbcode.js"></script>
+  <script src="find.js"></script>
+  <script src="settings.js"></script>
+  <script src="table.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

@@ -1,23 +1,59 @@
 # Notepad MD
 
-A Notepad-like desktop app for viewing and editing Markdown (`.md`) files, with a live, directly-editable preview pane.
+A Notepad-like desktop app for viewing and editing Markdown, text, BBCode and code/config files, with a live, directly-editable Markdown preview.
 
-Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2 — no bundled Chromium), so the whole app is a single ~3–4 MB executable instead of the 250–300 MB a Chromium-bundling framework would produce.
+Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2 — no bundled Chromium), so the whole app is a single ~4 MB executable instead of the 250–300 MB a Chromium-bundling framework would produce.
 
 ## Features
 
-- New / Open / Save / Save As / Delete File via the File menu, with unsaved-changes prompts
-- Edit directly in the rendered preview pane — changes sync back to the raw Markdown source, and vice versa
-- **Tabs** — open more than one document and a tab bar appears automatically (a single open document stays tab-free); each tab shows a dirty dot and has its own close (✕) button. `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle tabs, `Ctrl+W` closes the active one.
-- **Layout modes** (View menu): Preview Only (default), Edit Only, Preview Left/Edit Right, Edit Left/Preview Right — `Ctrl+Alt+1`...`4`. In the two split modes, drag the divider between the panes to resize them.
-- **Toolbar** — off by default, enable it from View > Toolbar or `Ctrl+T`. Includes undo/redo, line numbers, heading levels (H1–H4), bold/italic/strikethrough/underline, copy/cut/paste, insert table, code block, checklist items, numbered/bullet lists, indent/outdent, font size, find & replace, and delete file. Every command works whether you're typing in the raw editor or the live preview.
-- Code blocks in the preview show a copy button on hover (top-right) to copy the block's contents
-- Find & replace (`Ctrl+F` or the toolbar) with next/previous match and replace-one/replace-all — works in every layout mode, including Preview Only
-- Line numbers gutter (View menu or the toolbar), available for both the editor and the preview pane, scroll-synced to whichever is visible
-- Font size zoom (`Ctrl++` / `Ctrl+-`, or the toolbar)
-- Light / dark theme toggle (View menu or `Ctrl+Shift+D`) — defaults to your OS theme and remembers your choice
-- Thin, theme-colored scrollbars and text cursor
-- Open `.md`, `.markdown`, or `.txt` files from the Open dialog, or directly by passing a path as a command-line argument
+### Files and tabs
+- New / Open / Save / Save As / Delete File via the File menu; Open accepts several files at once. Files can also be **dragged onto the window** or passed on the command line.
+- **Session restore** (like Notepad++) — closing the app never prompts; every open tab, including unsaved edits, untitled documents, pins, bookmarks, per-tab view and font size, comes back on the next launch. Files on disk only change when you save. (Can be turned off in Settings; closing then offers to save unsaved changes.)
+- **Remembered state** — window size/position, theme, toolbar, menu bar, sidebar, status bar, line numbers, word wrap, spelling, the find bar / Advanced pane (filters, options, height) and all Settings survive a restart. Everything is kept in `%APPDATA%\com.notepadmd.app\session.json`.
+- **Tabs** — always shown. Unsaved tabs show a `*` before the name; the active tab has a red bar along its top. `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle, `Ctrl+W` or middle-click closes, double-click the empty tab bar for a new document. When there are many tabs, the mouse wheel steps through them exactly like the ‹ › buttons.
+- **Tab right-click menu** — Save, Save As, Pin/Unpin, Close, Close Others / Close All (both keep pinned tabs), Copy Full Path.
+- **Pinned tabs** — pin icon on the tab; pinned tabs stay at the left.
+- Files keep their encoding (UTF-8, UTF-8 BOM, UTF-16, ANSI) and line endings (CRLF/LF) when saved.
+
+### Views
+- **Per-tab layout** — Edit Only, Preview Only, Edit Left/Preview Right, Preview Left/Edit Right (`Ctrl+Alt+1`…`4`, View menu, or the right-hand **sidebar** icons). Drag the divider to resize the split.
+- **Per-tab preview mode / language** — the `MD` / `BB` button in the sidebar flips a tab between a Markdown and a BBCode preview (`Ctrl+Alt+M` / `Ctrl+Alt+B`, or View > Preview as…). Click the language in the status bar (or View > Language…) to pick any language for the tab, or go back to auto-detecting it from the file extension. The choice is remembered per tab.
+- **Per-tab font size** — `Ctrl`+mouse wheel, `Ctrl++` / `Ctrl+-`, `Ctrl+0` to reset (or click the % in the status bar).
+- **Word wrap** on/off (`Alt+Z`, View menu).
+- Show/hide the **menu bar** (tap `Alt`), **sidebar** (`Ctrl+Shift+E`), **toolbar** (`Ctrl+T`) and **status bar** (View menu).
+- Light / dark theme (`Ctrl+Shift+D`) or follow Windows.
+- Line numbers (`Ctrl+Shift+L`); bookmarked lines are shown in their bookmark colour.
+
+### Editing
+- Edit directly in the rendered Markdown preview — changes sync back to the Markdown source, and vice versa.
+- **Tables in the preview** (Obsidian-style) — right-click a cell: add row above/below, add column left/right, move row up/down, move column left/right, align column (left/center/right), delete row/column/table. `Tab` / `Shift+Tab` move between cells (Tab in the last cell adds a row), `Enter` moves down.
+- **Syntax colouring** for XML, HTML, YAML, JSON, INI, TOML, Python, JavaScript, PowerShell, MS-DOS batch, PHP, Markdown and **BBCode** (`.bbcode` / `.bb`). Code files show a read-only coloured view in the preview pane; BBCode shows a formatted, read-only preview (bold/italic/underline, links, images, quotes, lists, colours, sizes, code, tables, spoilers).
+- **Spell checking** in English (UK) or English (US) in the editor and preview; right-click a red-underlined word for suggestions, *Add to dictionary* or *Ignore*. `F7` toggles it; click the language in the status bar to switch.
+- **Toolbar** (off by default) with undo/redo, headings, bold/italic/strike/underline, copy/cut/paste, table, code block, checklist, lists, indent, font size, find, delete file.
+- Code blocks in the preview have a hover copy button; `http(s)` links open in your browser.
+
+### Find, Advanced find and bookmarks
+- **Find bar at the bottom** (`Ctrl+F`): Find, Replace, ↑ / ↓ (`Shift+F3` / `F3`), Replace, Replace All, and an **Advanced** checkbox (`Ctrl+Shift+F`). All matches are highlighted in the editor and preview.
+- **Advanced pane** — a resizable list of lines, modelled on the Noxturnal Monitoring Tool's Timeline:
+  - Filters: **From / To** (line numbers like `120` / `#120`, or times like `14:30`, `2024-10-14 14:30:05`, `20241014`; inclusive to the precision typed; lines without a timestamp inherit the previous one), **Find** (comma-separated terms, any of them), **Hide** (comma-separated terms to exclude), Match case, Whole word, Regex, and *This tab* / *All open tabs*.
+  - Columns: Line #, Time (detected timestamps), File (all-tabs mode), Text — click a header to sort, drag a header edge to resize.
+  - Click a row to jump to that line (double-click / `Enter` to start editing there); `Shift`/`Ctrl`+click and arrow keys select.
+  - Right-click menu: Bookmark (Green / Orange / Red, remove, clear all in file), Remove from the list, Copy cell / lines / line numbers / table, Show from here, Show up to here, Filter by (show only / hide rows containing this), Go to line, Select all.
+  - Keys: `Ctrl+B` bookmark, `Ctrl+Shift+B` remove bookmark, `Delete` remove from list, `Ctrl+C` / `Ctrl+Shift+C` copy lines / line numbers, `Ctrl+A` select all.
+  - **Add Bookmarks** checkbox always lists bookmarked lines; **Previous / Next** move between blocks of bookmarked lines; **Reset** clears filters and brings back removed rows; **Maximize** makes the list fill the window; **✕** closes the pane.
+  - Replace All in Advanced mode only changes the listed lines.
+- **Bookmarks in the editor** — `Ctrl+F2` toggle, `F2` / `Shift+F2` next / previous. Bookmarks follow their text when lines are inserted or deleted above them, and are saved with the session.
+
+### Settings (`Ctrl+,` or File > Settings)
+Theme; reopen tabs on start; menu bar / toolbar / sidebar / status bar; line numbers; word wrap; tab width; editor font, style (regular/bold/italic), text colour and background; preview font, style, text colour and background ("Use theme" returns a colour to the light/dark theme); default view and font size for new tabs; spell checking and language; Reset to defaults.
+
+- **Import / Export** — save all settings (plus your spelling dictionary) to a `.json` file and load them on another PC. Importing merges the dictionary.
+- **Register file types** — adds Notepad MD to Windows' "Open with" list for every supported extension (per user, no admin needed; *Unregister* removes it). Windows only lets you pick the *default* app yourself, so **Open Windows Default Apps** takes you there (or right-click a file > Open with > Choose another app > Notepad MD > Always).
+
+### About and updates
+**About > About Notepad MD** shows the version, the GitHub link and the author, plus **Check for Updates**. It asks GitHub for the latest release of `mccabedd/notepad-md`. If it's newer, it shows the release notes and asks first. It then downloads the `.exe` attached to the release and checks it: a valid program, the expected size, and GitHub's SHA-256 checksum. Finally it swaps it in for the running exe, restarts, and reopens every tab. If the app sits in a folder you can't write to, it says so and leaves the download in `%TEMP%\notepadmd-update`.
+
+To publish an update: bump `version` in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`, build, create a GitHub release tagged `vX.Y.Z`, and attach the `.exe`.
 
 ## Prerequisites (build only)
 
@@ -44,5 +80,20 @@ cargo run
 
 ## Project layout
 
-- `ui/` — static frontend (HTML/CSS/JS), loaded into the native WebView
-- `src-tauri/` — Rust backend: window/menu setup and file I/O commands
+- `ui/` — static frontend loaded into the native WebView (no build step):
+  - `renderer.js` — documents, tabs, layouts, editor colour layer, spelling, session, shortcuts
+  - `find.js` — bottom find bar, Advanced pane, bookmarks
+  - `settings.js` — Settings dialog, word wrap / sidebar / menu bar / status bar
+  - `table.js` — table editing in the preview
+  - `bbcode.js` — BBCode grammar and preview renderer
+  - `spell-worker.js` — spellchecker (runs off the UI thread)
+- `ui/vendor/` — third-party libraries (see below)
+- `src-tauri/` — Rust backend: `main.rs` (window/menu setup, file I/O with encoding detection, session storage, menu-bar visibility) and `system.rs` (file-type registration, self-update via Windows' built-in `curl.exe` / `certutil`)
+
+## Third-party components
+
+- [marked](https://github.com/markedjs/marked) (MIT) — Markdown rendering
+- [Turndown](https://github.com/mixmark-io/turndown) + turndown-plugin-gfm (MIT) — HTML → Markdown
+- [highlight.js](https://highlightjs.org) 11.9.0 (BSD-3-Clause) — syntax colouring
+- [Typo.js](https://github.com/cfinke/Typo.js) 1.2.4 (BSD-3-Clause) — Hunspell-compatible spellchecker
+- en-GB / en-US Hunspell dictionaries from [SCOWL / wordlist.sourceforge.net](http://wordlist.sourceforge.net), via the `dictionary-en` and `dictionary-en-gb` packages (permissive SCOWL licence)
