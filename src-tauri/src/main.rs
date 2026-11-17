@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod instance;
 mod system;
 
 use std::fs;
@@ -187,11 +188,17 @@ fn main() {
         .filter(|a| !a.starts_with('-'))
         .map(PathBuf::from)
         .filter(|p| p.is_file())
+        .map(|p| if p.is_absolute() { p } else { std::env::current_dir().map(|d| d.join(&p)).unwrap_or(p) })
         .collect();
+    let after_update = std::env::args().any(|a| a == "--after-update");
+    if !instance::acquire(&initial_files, after_update) {
+        return; // handed to the running window
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .register_uri_scheme_protocol("localimg", |_ctx, req| instance::serve_local_image(&req))
         .manage(AppState {
             initial_files: Mutex::new(initial_files),
             closing: AtomicBool::new(false),
@@ -218,6 +225,7 @@ fn main() {
             system::cmd_install_update,
         ])
         .setup(|app| {
+            instance::listen(app.handle().clone());
             // Accelerator strings below are display-only hint text: every shortcut is actually
             // handled by the JS keydown handler in ui/renderer.js.
             let file_submenu = Submenu::with_items(

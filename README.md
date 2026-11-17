@@ -9,8 +9,11 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 ### Files and tabs
 - New / Open / Save / Save As / Delete File via the File menu; Open accepts several files at once. Files can also be **dragged onto the window** or passed on the command line.
 - **Session restore** (like Notepad++) — closing the app never prompts; every open tab, including unsaved edits, untitled documents, pins, bookmarks, per-tab view and font size, comes back on the next launch. Files on disk only change when you save. (Can be turned off in Settings; closing then offers to save unsaved changes.)
-- **Remembered state** — window size/position, theme, toolbar, menu bar, sidebar, status bar, line numbers, word wrap, spelling, the find bar / Advanced pane (filters, options, height) and all Settings survive a restart. Everything is kept in `%APPDATA%\com.notepadmd.app\session.json`.
+- **Remembered state** — window size/position, theme, toolbar, menu bar, sidebar, status bar, line numbers, word wrap, spelling, the find bar / Advanced pane (filters, options, height) and all Settings survive a restart. Everything is kept in `%APPDATA%\com.notepadmd.app\session.json`, including the text of unsaved tabs (there are no separate temp files). `instance.json` next to it lets a second launch find the running window.
 - **Tabs** — always shown. Unsaved tabs show a `*` before the name; the active tab has a red bar along its top. `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle, `Ctrl+W` or middle-click closes, double-click the empty tab bar for a new document. When there are many tabs, the mouse wheel steps through them exactly like the ‹ › buttons.
+- **Drag tabs** to rearrange them (pinned tabs stay together at the left). The order is remembered.
+- **One window** — opening a file while Notepad MD is already running (double-click, *Open with*, command line) opens it as a tab in the running window instead of starting a second copy.
+- New documents are numbered like Notepad++: a new tab takes the lowest free number (*Untitled*, *Untitled 2*, …). Empty untitled tabs are kept across restarts too.
 - **Tab right-click menu** — Save, Save As, Pin/Unpin, Close, Close Others / Close All (both keep pinned tabs), Copy Full Path.
 - **Pinned tabs** — pin icon on the tab; pinned tabs stay at the left.
 - Files keep their encoding (UTF-8, UTF-8 BOM, UTF-16, ANSI) and line endings (CRLF/LF) when saved.
@@ -30,6 +33,7 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 - **Syntax colouring** for XML, HTML, YAML, JSON, INI, TOML, Python, JavaScript, PowerShell, MS-DOS batch, PHP, Markdown and **BBCode** (`.bbcode` / `.bb`). Code files show a read-only coloured view in the preview pane; BBCode shows a formatted, read-only preview (bold/italic/underline, links, images, quotes, lists, colours, sizes, code, tables, spoilers).
 - **Spell checking** in English (UK) or English (US) in the editor and preview; right-click a red-underlined word for suggestions, *Add to dictionary* or *Ignore*. `F7` toggles it; click the language in the status bar to switch.
 - **Toolbar** (off by default) with undo/redo, headings, bold/italic/strike/underline, copy/cut/paste, table, code block, checklist, lists, indent, font size, find, delete file.
+- **Insert image** (toolbar) — pick a picture and it's added as `![name](path)`, relative to the document when it has been saved (spaces become `%20`), otherwise as a full path. Local images show in the preview; editing in the preview keeps the path as written.
 - Code blocks in the preview have a hover copy button; `http(s)` links open in your browser.
 
 ### Find, Advanced find and bookmarks
@@ -88,7 +92,7 @@ cargo run
   - `bbcode.js` — BBCode grammar and preview renderer
   - `spell-worker.js` — spellchecker (runs off the UI thread)
 - `ui/vendor/` — third-party libraries (see below)
-- `src-tauri/` — Rust backend: `main.rs` (window/menu setup, file I/O with encoding detection, session storage, menu-bar visibility) and `system.rs` (file-type registration, self-update via Windows' built-in `curl.exe` / `certutil`)
+- `src-tauri/` — Rust backend: `main.rs` (window/menu setup, file I/O with encoding detection, session storage, menu-bar visibility) `system.rs` (file-type registration, self-update via Windows' built-in `curl.exe` / `certutil`) and `instance.rs` (single instance, local images for the preview)
 
 ## Third-party components
 

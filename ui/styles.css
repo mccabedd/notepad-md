@@ -1574,3 +1574,26 @@ body.adv-maximised .adv-pane {
 .status-btn.off {
   text-decoration: line-through;
 }
+
+/* ---------- dragging tabs ---------- */
+
+body.tab-dragging,
+body.tab-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+.tab.dragging {
+  opacity: 0.55;
+}
+.tab.drop-before {
+  box-shadow: inset 3px 0 0 var(--tab-active-bar);
+}
+.tab.drop-after {
+  box-shadow: inset -3px 0 0 var(--tab-active-bar);
+}
+.tab.active.drop-before {
+  box-shadow: inset 0 3px 0 var(--tab-active-bar), inset 3px 0 0 var(--tab-active-bar);
+}
+.tab.active.drop-after {
+  box-shadow: inset 0 3px 0 var(--tab-active-bar), inset -3px 0 0 var(--tab-active-bar);
+}

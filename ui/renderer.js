@@ -33,7 +33,6 @@ let turndownService;
 let docs = [];
 let activeId = null;
 let docCounter = 0;
-let untitledCounter = 0;
 let layoutMode = 'preview-only'; // mirrors the active document's own layoutMode
 let lineNumbersVisible = false;
 let splitRatio = 0.5;
@@ -124,6 +123,15 @@ function setupMarkdownEngine() {
     filter: ['u'],
     replacement: (content) => '<u>' + content + '</u>',
   });
+  // Pictures shown through the local image server keep the path written in the Markdown.
+  turndownService.addRule('localImage', {
+    filter: (node) => node.nodeName === 'IMG' && node.hasAttribute('data-md-src'),
+    replacement: (content, node) => {
+      const alt = (node.getAttribute('alt') || '').replace(/[[\]]/g, '');
+      const title = node.getAttribute('title');
+      return '![' + alt + '](' + node.getAttribute('data-md-src') + (title ? ' "' + title.replace(/"/g, '\\"') + '"' : '') + ')';
+    },
+  });
   turndownService.addRule('codeCopyButton', {
     filter: (node) => node.nodeName === 'BUTTON' && node.classList.contains('code-copy-btn'),
     replacement: () => '',
@@ -190,11 +198,18 @@ function makeDoc(path, content, opts = {}) {
   };
   doc.lastContent = doc.content;
   if (!doc.path) {
-    doc.untitledNum = opts.untitledNum || ++untitledCounter;
-    untitledCounter = Math.max(untitledCounter, doc.untitledNum);
+    // Like Notepad++: a new document takes the lowest number no open tab is using.
+    doc.untitledNum = opts.untitledNum || lowestFreeUntitledNum(docs);
   }
   doc.dirty = doc.content !== doc.savedContent;
   return doc;
+}
+
+function lowestFreeUntitledNum(list) {
+  const used = new Set(list.filter((d) => !d.path).map((d) => d.untitledNum));
+  let n = 1;
+  while (used.has(n)) n++;
+  return n;
 }
 
 function newUntitledDoc() {
@@ -892,6 +907,7 @@ function renderPreview(doc) {
   if (mode === 'markdown') {
     preview.setAttribute('contenteditable', 'true');
     preview.innerHTML = marked_.parse(doc.content);
+    fixPreviewImages(doc);
     enableCheckboxes();
     highlightPreviewCodeBlocks();
     addCodeCopyButtons();
@@ -1144,6 +1160,7 @@ function renderTabs() {
     tab.addEventListener('click', () => setActiveTab(doc.id));
     tab.addEventListener('mousedown', (e) => {
       if (e.button === 1) e.preventDefault(); // stop middle-click autoscroll
+      startTabDrag(e, doc);
     });
     tab.addEventListener('auxclick', (e) => {
       if (e.button === 1) closeTab(doc.id);
@@ -1160,6 +1177,82 @@ function renderTabs() {
   updateWindowTitle();
 }
 
+
+/* ---------- drag tabs to reorder ---------- */
+
+// Mouse events rather than HTML5 drag & drop: the window's file drop handling swallows HTML5
+// drag events. Pinned tabs can only move among pinned tabs, unpinned among unpinned.
+let tabDrag = null;
+
+function startTabDrag(e, doc) {
+  if (e.button !== 0 || e.target.closest('button')) return;
+  tabDrag = { id: doc.id, x: e.clientX, active: false, target: -1 };
+}
+
+function tabDropIndex(clientX) {
+  const doc = docs.find((d) => d.id === tabDrag.id);
+  const tabs = [...tabbarEl.querySelectorAll('.tab')];
+  let idx = tabs.length;
+  for (let i = 0; i < tabs.length; i++) {
+    const r = tabs[i].getBoundingClientRect();
+    if (clientX < r.left + r.width / 2) {
+      idx = i;
+      break;
+    }
+  }
+  const pinnedCount = docs.filter((d) => d.pinned).length;
+  return doc.pinned ? Math.min(idx, pinnedCount) : Math.max(idx, pinnedCount);
+}
+
+function showTabDropMarker(idx) {
+  const tabs = [...tabbarEl.querySelectorAll('.tab')];
+  tabs.forEach((t) => t.classList.remove('drop-before', 'drop-after'));
+  if (idx < tabs.length) tabs[idx].classList.add('drop-before');
+  else if (tabs.length) tabs[tabs.length - 1].classList.add('drop-after');
+}
+
+document.addEventListener('mousemove', (e) => {
+  if (!tabDrag) return;
+  if (!tabDrag.active) {
+    if (Math.abs(e.clientX - tabDrag.x) < 6) return;
+    tabDrag.active = true;
+    document.body.classList.add('tab-dragging');
+    const el = tabbarEl.querySelector('.tab[data-id="' + tabDrag.id + '"]');
+    if (el) el.classList.add('dragging');
+  }
+  // Scroll the tab strip when dragging past its ends.
+  const r = tabbarEl.getBoundingClientRect();
+  if (e.clientX < r.left + 20) tabbarEl.scrollLeft -= 12;
+  else if (e.clientX > r.right - 20) tabbarEl.scrollLeft += 12;
+  tabDrag.target = tabDropIndex(e.clientX);
+  showTabDropMarker(tabDrag.target);
+});
+
+document.addEventListener('mouseup', () => {
+  if (!tabDrag) return;
+  const drag = tabDrag;
+  tabDrag = null;
+  if (!drag.active) return;
+  document.body.classList.remove('tab-dragging');
+  // The click that follows the drag must not count as a tab click.
+  const eat = (ev) => ev.stopPropagation();
+  window.addEventListener('click', eat, true);
+  setTimeout(() => window.removeEventListener('click', eat, true), 0);
+  moveTab(drag.id, drag.target);
+});
+
+/** Move a tab so it ends up before the tab currently at position `to` (docs.length = end). */
+function moveTab(id, to) {
+  const from = docs.findIndex((d) => d.id === id);
+  if (from < 0 || to < 0) {
+    renderTabs();
+    return;
+  }
+  const [doc] = docs.splice(from, 1);
+  docs.splice(to > from ? to - 1 : to, 0, doc);
+  renderTabs();
+  scheduleSessionSave();
+}
 function updateTabScrollButtons() {
   const overflow = tabbarEl.scrollWidth > tabbarEl.clientWidth + 1;
   tabScrollEl.classList.toggle('hidden', !overflow);
@@ -1309,7 +1402,6 @@ function buildSession() {
   return JSON.stringify({
     version: 2,
     activeIndex: docs.findIndex((d) => d.id === activeId),
-    untitledCounter,
     ui: captureUi(),
     docs: docs.map((d) => ({
       path: d.path,
@@ -1415,15 +1507,17 @@ async function restoreDocs(s) {
       } else if (fromDisk) {
         doc = makeDoc(d.path, fromDisk.text, opts);
       }
-    } else if ((typeof d.content === 'string' && d.content !== '') || d.pinned) {
-      doc = makeDoc(null, d.content || '', { ...opts, untitledNum: d.untitledNum || undefined, lang: LANGS[d.lang] ? d.lang : 'markdown' });
+    } else {
+      // Untitled tabs come back even when empty, so a restart never removes a tab.
+      let num = d.untitledNum;
+      if (!num || restored.some((r) => !r.path && r.untitledNum === num)) num = lowestFreeUntitledNum(restored);
+      doc = makeDoc(null, typeof d.content === 'string' ? d.content : '', { ...opts, untitledNum: num, lang: LANGS[d.lang] ? d.lang : 'markdown' });
     }
     if (doc) {
       restored.push(doc);
       if (i === s.activeIndex) active = doc.id;
     }
   }
-  untitledCounter = Math.max(untitledCounter, s.untitledCounter || 0);
   return { docs: restored, active };
 }
 
@@ -1797,6 +1891,103 @@ async function doPaste() {
   }
 }
 
+
+/* ---------- images ---------- */
+
+// Local pictures are served by the Rust side (custom "localimg" protocol), because the WebView
+// can't load file paths directly. The preview keeps the path as written in the Markdown in
+// data-md-src, so editing in the preview writes the original path back, not the served URL.
+
+const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico', 'avif', 'jfif'];
+
+function dirOf(p) {
+  const s = p.replace(/\\/g, '/');
+  return s.slice(0, s.lastIndexOf('/'));
+}
+
+/** Absolute local path for an image reference in a document, or null for web/data images. */
+function resolveImagePath(src, doc) {
+  if (!src || /^(https?:|data:|blob:)/i.test(src)) return null;
+  let s = src;
+  try {
+    s = decodeURI(src);
+  } catch (e) {
+    /* keep as written */
+  }
+  s = s.replace(/^file:\/\/\/?/i, '').replace(/\\/g, '/');
+  if (/^[a-z]:\//i.test(s) || s.startsWith('//')) return s;
+  if (!doc || !doc.path) return null;
+  const parts = dirOf(doc.path).split('/');
+  for (const seg of s.split('/')) {
+    if (seg === '..') parts.length > 1 && parts.pop();
+    else if (seg !== '.' && seg !== '') parts.push(seg);
+  }
+  return parts.join('/');
+}
+
+function localImageUrl(abs) {
+  return 'http://localimg.localhost/' + encodeURIComponent(abs);
+}
+
+function fixPreviewImages(doc) {
+  for (const img of preview.querySelectorAll('img')) {
+    const src = img.getAttribute('src');
+    const abs = resolveImagePath(src, doc);
+    if (!abs) continue;
+    img.setAttribute('data-md-src', src);
+    img.src = localImageUrl(abs);
+  }
+}
+
+/** Path to write into the Markdown: relative to the document when it is saved, else absolute. */
+function imageRefFor(file, doc) {
+  const target = file.replace(/\\/g, '/');
+  let ref = target;
+  if (doc && doc.path) {
+    const from = dirOf(doc.path).split('/');
+    const to = target.split('/');
+    if (from[0].toLowerCase() === to[0].toLowerCase()) {
+      let i = 0;
+      while (i < from.length && i < to.length - 1 && from[i].toLowerCase() === to[i].toLowerCase()) i++;
+      // Sharing only the drive (C:/) isn't worth a long ../../.. chain: keep it absolute.
+      if (i > 1) ref = [...Array(from.length - i).fill('..'), ...to.slice(i)].join('/');
+    }
+  }
+  // Spaces and brackets would end the link early.
+  return ref.replace(/[ ()<>]/g, (c) => encodeURIComponent(c));
+}
+
+async function insertImage() {
+  const doc = getActive();
+  if (!doc) return;
+  const pv = previewTarget();
+  const sel = window.getSelection();
+  const range = pv && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+  const file = await dialogApi.open({
+    multiple: false,
+    title: 'Insert Image',
+    defaultPath: doc.path ? dirOf(doc.path).replace(/\//g, '\\') : undefined,
+    filters: [{ name: 'Images', extensions: IMAGE_EXTS }, { name: 'All Files', extensions: ['*'] }],
+  });
+  if (!file) return;
+  const path = typeof file === 'string' ? file : file.path;
+  const alt = basename(path).replace(/\.[^.]+$/, '').replace(/[\[\]]/g, '');
+  const ref = imageRefFor(path, doc);
+  if (pv && isMarkdownPreview(doc)) {
+    preview.focus();
+    if (range) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    const html =
+      '<img alt="' + escapeHtml(alt).replace(/"/g, '&quot;') + '" data-md-src="' + escapeHtml(ref).replace(/"/g, '&quot;') +
+      '" src="' + localImageUrl(path.replace(/\\/g, '/')) + '">';
+    document.execCommand('insertHTML', false, html);
+    syncFromPreview();
+  } else {
+    insertAtCursorEditor('![' + alt + '](' + ref + ')');
+  }
+}
 /* ---------- toolbar dispatch ---------- */
 
 function runToolbarCommand(cmd) {
@@ -1837,6 +2028,9 @@ function runToolbarCommand(cmd) {
       break;
     case 'code-block':
       pv ? codeBlockPreview() : codeBlockEditor();
+      break;
+    case 'image':
+      insertImage();
       break;
     case 'checklist':
       pv
@@ -2173,6 +2367,11 @@ function wireDomEvents() {
 
 function wireMenuListeners() {
   listen('menu-new', () => addDocAndActivate(newUntitledDoc()));
+  // Another launch (double-clicked file, "Open with") handed its files to this window.
+  listen('open-files', async (e) => {
+    while (!sessionReady) await new Promise((r) => setTimeout(r, 100));
+    for (const p of e.payload || []) await openPath(p);
+  });
   listen('menu-open', () => openFile());
   listen('menu-save', () => saveActive());
   listen('menu-save-as', () => saveActiveAs());

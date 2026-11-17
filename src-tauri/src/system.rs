@@ -296,7 +296,7 @@ pub async fn cmd_install_update(app: tauri::AppHandle, asset_url: String, digest
             return Err(format!("Could not install the update: {}", e));
         }
     }
-    err(Command::new(&exe).spawn()).map_err(|e| format!("Updated, but could not restart: {}", e))?;
+    err(Command::new(&exe).arg("--after-update").spawn()).map_err(|e| format!("Updated, but could not restart: {}", e))?;
     // Give the reply a moment to reach the page, then quit; the new version takes over.
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(300));

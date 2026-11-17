@@ -46,6 +46,8 @@ This started as an Electron app and was rewritten from scratch in Rust/Tauri for
 
 12. **Phase 11** — "Maximize" wording + ✕ on the Advanced pane, view order Edit/Preview/Edit-Preview/Preview-Edit, Settings Import/Export, Register File Types, About menu with Check for Updates (self-update), per-tab preview mode (MD/BB sidebar button, status-bar language menu).
 
+13. **Phase 12 (v1.0.1)** — Empty untitled tabs survive a restart, and a new tab takes the lowest free "Untitled N" number. Single instance: a second launch hands its files to the running window (`src-tauri/src/instance.rs`: named mutex per data folder + loopback TCP with a token in `instance.json`; the updater relaunches with `--after-update` so the new copy waits for the old one instead of forwarding to it). Insert Image toolbar button; local images in the Markdown preview are served by a `localimg` custom protocol (`http://localimg.localhost/<encoded path>`, image types only) and keep their written path in `data-md-src` so preview edits round-trip. Tabs can be dragged to reorder (mouse events, not HTML5 DnD, because Tauri's file-drop handling swallows HTML5 drag events; pinned and unpinned tabs stay in their own groups).
+
 ## Current state
 
 Everything above is implemented, committed to source (no git repo was initialized in this project — consider running `git init` on the new machine if you want version control), and the last debug + release builds compiled clean and launched without crashing. **Visual/interactive verification was never done by the AI** (sandboxed — no GUI) — only build success and "process stays alive a few seconds" were checked. Things worth eyeballing on the new machine:
