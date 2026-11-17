@@ -66,6 +66,11 @@ const LANGS = {
   powershell: { label: 'PowerShell', hljs: 'powershell', render: 'code', exts: ['ps1'] },
   dos: { label: 'MS-DOS Batch', hljs: 'dos', render: 'code', exts: ['bat', 'cmd'] },
   php: { label: 'PHP', hljs: 'php', render: 'code', exts: ['php'] },
+  java: { label: 'Java', hljs: 'java', render: 'code', exts: ['java'] },
+  css: { label: 'CSS', hljs: 'css', render: 'code', exts: ['css'] },
+  c: { label: 'C', hljs: 'c', render: 'code', exts: ['c', 'h'] },
+  csharp: { label: 'C#', hljs: 'csharp', render: 'code', exts: ['cs'] },
+  cpp: { label: 'C++', hljs: 'cpp', render: 'code', exts: ['cpp', 'hpp'] },
 };
 
 const EXT_LANG = {
@@ -83,6 +88,11 @@ const EXT_LANG = {
   ps1: 'powershell', psm1: 'powershell', psd1: 'powershell',
   bat: 'dos', cmd: 'dos',
   php: 'php', phtml: 'php',
+  java: 'java',
+  css: 'css',
+  c: 'c', h: 'c',
+  cs: 'csharp', csx: 'csharp',
+  cpp: 'cpp', cc: 'cpp', cxx: 'cpp', hpp: 'cpp', hh: 'cpp', hxx: 'cpp', inl: 'cpp', ino: 'cpp',
 };
 
 function langForPath(p) {

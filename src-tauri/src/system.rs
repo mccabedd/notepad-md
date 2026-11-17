@@ -160,6 +160,44 @@ pub fn cmd_file_types_status() -> Result<FileTypeStatus, String> {
     })
 }
 
+/* ---------------- Explorer right-click "Edit in Notepad-MD" ---------------- */
+
+/// A classic shell verb on every file type (`*`), per user. On Windows 11 classic verbs appear
+/// under "Show more options" (Shift+F10); the compact menu only lists packaged apps.
+const CONTEXT_VERB: &str = "*\\shell\\NotepadMD.Edit";
+
+#[tauri::command]
+pub fn cmd_set_context_menu(enabled: bool) -> Result<(), String> {
+    let root = classes_root()?;
+    if enabled {
+        let exe = exe_path()?.to_string_lossy().to_string();
+        let (verb, _) = err(root.create_subkey(CONTEXT_VERB))?;
+        err(verb.set_value("", &"Edit in Notepad-MD"))?;
+        err(verb.set_value("Icon", &format!("\"{}\",0", exe)))?;
+        err(err(verb.create_subkey("command"))?.0.set_value("", &open_command(&exe)))?;
+    } else {
+        let _ = root.delete_subkey_all(CONTEXT_VERB);
+    }
+    notify_assoc_changed();
+    Ok(())
+}
+
+/// "on" (points at this exe), "other" (points at another copy) or "off".
+#[tauri::command]
+pub fn cmd_context_menu_status() -> Result<String, String> {
+    let exe = exe_path()?.to_string_lossy().to_string();
+    let current: Option<String> = classes_root()?
+        .open_subkey(format!("{}\\command", CONTEXT_VERB))
+        .ok()
+        .and_then(|k| k.get_value("").ok());
+    Ok(match current {
+        Some(c) if c.eq_ignore_ascii_case(&open_command(&exe)) => "on",
+        Some(_) => "other",
+        None => "off",
+    }
+    .into())
+}
+
 #[tauri::command]
 pub fn cmd_open_default_apps() -> Result<(), String> {
     open::that("ms-settings:defaultapps").map_err(|e| e.to_string())

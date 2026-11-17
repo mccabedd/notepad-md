@@ -221,6 +221,8 @@ fn main() {
             system::cmd_unregister_file_types,
             system::cmd_file_types_status,
             system::cmd_open_default_apps,
+            system::cmd_set_context_menu,
+            system::cmd_context_menu_status,
             system::cmd_check_update,
             system::cmd_install_update,
         ])

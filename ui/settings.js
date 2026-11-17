@@ -378,6 +378,34 @@ async function refreshFileTypeStatus() {
   } catch (e) {
     ftStatus.textContent = 'Could not check registration: ' + e;
   }
+  await refreshContextMenuStatus();
+}
+
+/* ---------- Explorer right-click "Edit in Notepad-MD" ---------- */
+
+const ctxMenuBox = document.getElementById('ctx-menu');
+const ctxStatus = document.getElementById('ctx-status');
+const CTX_HINT = 'On Windows 11 it\'s under "Show more options" (or Shift+right-click).';
+
+async function refreshContextMenuStatus() {
+  try {
+    const s = await invoke('cmd_context_menu_status');
+    ctxMenuBox.checked = s === 'on';
+    ctxStatus.textContent =
+      s === 'other' ? 'It currently opens a different copy of the app. Tick the box to point it at this one.' : CTX_HINT;
+  } catch (e) {
+    ctxStatus.textContent = 'Could not check the right-click menu: ' + e;
+  }
+}
+
+async function setContextMenu(enabled) {
+  try {
+    await invoke('cmd_set_context_menu', { enabled });
+    settingsMessage(enabled ? '"Edit in Notepad-MD" added to the Explorer right-click menu.' : '"Edit in Notepad-MD" removed from the Explorer right-click menu.');
+  } catch (e) {
+    settingsMessage('Could not change the right-click menu: ' + e, true);
+  }
+  await refreshContextMenuStatus();
 }
 
 async function registerFileTypes() {
@@ -405,6 +433,10 @@ function wireSettings() {
   document.getElementById('settings-import').addEventListener('click', importSettings);
   document.getElementById('ft-register').addEventListener('click', registerFileTypes);
   document.getElementById('ft-unregister').addEventListener('click', unregisterFileTypes);
+  ctxMenuBox.addEventListener('change', (e) => {
+    e.stopPropagation(); // registry state, not a saved setting
+    setContextMenu(ctxMenuBox.checked);
+  });
   document.getElementById('ft-defaults').addEventListener('click', () =>
     invoke('cmd_open_default_apps').catch((e) => settingsMessage('Could not open Windows Settings: ' + e, true))
   );

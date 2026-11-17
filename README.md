@@ -30,7 +30,7 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 ### Editing
 - Edit directly in the rendered Markdown preview — changes sync back to the Markdown source, and vice versa.
 - **Tables in the preview** (Obsidian-style) — right-click a cell: add row above/below, add column left/right, move row up/down, move column left/right, align column (left/center/right), delete row/column/table. `Tab` / `Shift+Tab` move between cells (Tab in the last cell adds a row), `Enter` moves down.
-- **Syntax colouring** for XML, HTML, YAML, JSON, INI, TOML, Python, JavaScript, PowerShell, MS-DOS batch, PHP, Markdown and **BBCode** (`.bbcode` / `.bb`). Code files show a read-only coloured view in the preview pane; BBCode shows a formatted, read-only preview (bold/italic/underline, links, images, quotes, lists, colours, sizes, code, tables, spoilers).
+- **Syntax colouring** for XML, HTML, CSS, YAML, JSON, INI, TOML, Python, JavaScript, Java, C, C#, C++, PowerShell (`.ps1`), MS-DOS batch (`.bat` / `.cmd`), PHP, Markdown and **BBCode** (`.bbcode` / `.bb`). Code files show a read-only coloured view in the preview pane; BBCode shows a formatted, read-only preview (bold/italic/underline, links, images, quotes, lists, colours, sizes, code, tables, spoilers).
 - **Spell checking** in English (UK) or English (US) in the editor and preview; right-click a red-underlined word for suggestions, *Add to dictionary* or *Ignore*. `F7` toggles it; click the language in the status bar to switch.
 - **Toolbar** (off by default) with undo/redo, headings, bold/italic/strike/underline, copy/cut/paste, table, code block, checklist, lists, indent, font size, find, delete file.
 - **Insert image** (toolbar) — pick a picture and it's added as `![name](path)`, relative to the document when it has been saved (spaces become `%20`), otherwise as a full path. Local images show in the preview; editing in the preview keeps the path as written.
@@ -52,6 +52,7 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 Theme; reopen tabs on start; menu bar / toolbar / sidebar / status bar; line numbers; word wrap; tab width; editor font, style (regular/bold/italic), text colour and background; preview font, style, text colour and background ("Use theme" returns a colour to the light/dark theme); default view and font size for new tabs; spell checking and language; Reset to defaults.
 
 - **Import / Export** — save all settings (plus your spelling dictionary) to a `.json` file and load them on another PC. Importing merges the dictionary.
+- **Edit in Notepad-MD** — a checkbox adds *Edit in Notepad-MD* (with the app's icon) to Explorer's right-click menu for every file (per user, no admin needed). On Windows 11 it's under *Show more options* / Shift+right-click, because the new compact menu only lists packaged (Store/MSIX) apps.
 - **Register file types** — adds Notepad MD to Windows' "Open with" list for every supported extension (per user, no admin needed; *Unregister* removes it). Windows only lets you pick the *default* app yourself, so **Open Windows Default Apps** takes you there (or right-click a file > Open with > Choose another app > Notepad MD > Always).
 
 ### About and updates
