@@ -2,6 +2,7 @@
 
 mod instance;
 mod linkmenu;
+mod savedialog;
 mod system;
 
 use std::fs;
@@ -264,6 +265,7 @@ fn main() {
             system::cmd_set_context_menu,
             system::cmd_context_menu_status,
             system::cmd_download_url,
+            savedialog::cmd_save_dialog,
             system::cmd_check_update,
             system::cmd_install_update,
         ])

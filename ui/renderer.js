@@ -2031,7 +2031,7 @@ function saveFilters(doc) {
 async function saveDocGeneric(doc, forcePrompt) {
   let path = doc.path;
   if (!path || forcePrompt) {
-    path = await dialogApi.save({
+    path = await invoke('cmd_save_dialog', {
       filters: saveFilters(doc),
       defaultPath: doc.path || (/\.[A-Za-z0-9]{1,8}$/.test(tabTitle(doc)) ? tabTitle(doc) : tabTitle(doc) + '.' + langInfo(doc).exts[0]),
     });
