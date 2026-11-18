@@ -72,7 +72,18 @@
     </div>
   </div>
 
+  <!-- Shown when the active tab's file was changed or deleted by another program. -->
+  <div id="disk-notice" class="disk-notice hidden" role="alert">
+    <span id="disk-notice-text"></span>
+    <span id="disk-notice-btns" class="disk-notice-btns"></span>
+  </div>
+
   <div class="main-area">
+    <!-- View > Outline: the headings of a Markdown document. -->
+    <div class="outline hidden" id="outline">
+      <div class="outline-head"><span>Outline</span><button id="outline-close" title="Close the outline (Ctrl+Shift+O)">&#10005;</button></div>
+      <div class="outline-list" id="outline-list"></div>
+    </div>
     <div class="workspace" id="workspace">
       <div class="editor-pane" id="editor-pane">
         <div class="line-numbers hidden" id="line-numbers"></div>
@@ -156,6 +167,7 @@
   <div class="statusbar">
     <span id="status-file">Untitled</span>
     <span id="status-dirty"></span>
+    <button id="status-follow" class="status-btn status-follow hidden" title="Following this file: new lines appear as it grows. Click to stop (View &gt; Follow File)">&#10227; Following</button>
     <span class="spacer"></span>
     <button id="status-lang" class="status-btn">Markdown</button>
     <button id="status-spell" class="status-btn" title="Click to switch spelling language (F7 turns spell check on/off)">English (UK)</button>
@@ -180,12 +192,14 @@
           <label class="check"><input type="checkbox" data-s="toolbar" /> Show toolbar <kbd>Ctrl+T</kbd></label>
           <label class="check"><input type="checkbox" data-s="sidebar" /> Show sidebar <kbd>Ctrl+Shift+E</kbd></label>
           <label class="check"><input type="checkbox" data-s="statusBar" /> Show status bar</label>
+          <label class="check"><input type="checkbox" data-s="outline" /> Show the outline (headings) panel <kbd>Ctrl+Shift+O</kbd></label>
           <label class="row">Tab header font size <span><input type="number" data-s="tabFontSize" min="9" max="20" step="0.5" /> px</span></label>
         </section>
         <section>
           <h3>Editor</h3>
           <label class="check"><input type="checkbox" data-s="lineNumbers" /> Line numbers <kbd>Ctrl+Shift+L</kbd></label>
           <label class="check"><input type="checkbox" data-s="wordWrap" /> Word wrap <kbd>Alt+Z</kbd></label>
+          <label class="check"><input type="checkbox" data-s="autoPair" /> Auto-close brackets and quotes</label>
           <label class="row">Tab width <select data-s="tabSize"><option value="2">2 spaces</option><option value="4">4 spaces</option><option value="8">8 spaces</option></select></label>
           <label class="row">Font <input type="text" data-s="editFont" list="font-list" /></label>
           <label class="row">Style <select data-s="editStyle"><option value="normal">Regular</option><option value="bold">Bold</option><option value="italic">Italic</option><option value="bold-italic">Bold Italic</option></select></label>
@@ -231,6 +245,17 @@
       </div>
     </div>
   </div>
+  <div id="goto" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="goto-title">
+    <div class="modal-panel goto-panel">
+      <div class="modal-head"><span id="goto-title">Go to Line</span></div>
+      <div class="goto-body">
+        <label for="goto-input" id="goto-label">Line number</label>
+        <input id="goto-input" type="number" min="1" step="1" />
+        <div id="goto-msg" class="goto-msg"></div>
+      </div>
+      <div class="modal-foot"><span class="spacer"></span><button id="goto-cancel">Cancel</button><button id="goto-go" class="primary">Go</button></div>
+    </div>
+  </div>
   <div id="about" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="about-title">
     <div class="modal-panel about-panel">
       <div class="modal-head">
@@ -239,7 +264,7 @@
       </div>
       <div class="about-body">
         <img src="app-icon.png" alt="" width="64" height="64" />
-        <div class="about-name">NotePad-MD <span id="about-version">v1.0.4</span></div>
+        <div class="about-name">NotePad-MD <span id="about-version">v1.0.5</span></div>
         <a href="https://github.com/mccabedd/notepad-md" id="about-link">https://github.com/mccabedd/notepad-md</a>
         <div>Created by David McCabe</div>
         <button id="about-update" class="primary">Check for Updates</button>
@@ -277,6 +302,7 @@
   <script src="find.js"></script>
   <script src="settings.js"></script>
   <script src="table.js"></script>
+  <script src="extras.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

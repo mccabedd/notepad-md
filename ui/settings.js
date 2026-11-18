@@ -13,6 +13,8 @@ const DEFAULT_SETTINGS = {
   wordWrap: true,
   tabSize: 4,
   tabFontSize: 12.5, // tab header text, px
+  outline: false, // the headings panel at the left
+  autoPair: true, // auto-close brackets and quotes in the editor
   newTabView: 'preview-only', // or 'same' = same view as the tab you are on
   newTabFontSize: 14,
   editFont: 'Consolas',
@@ -87,6 +89,7 @@ function applySettings() {
   editor.setAttribute('wrap', settings.wordWrap ? 'soft' : 'off');
   sidebarEl.classList.toggle('hidden', !settings.sidebar);
   statusbarEl.classList.toggle('hidden', !settings.statusBar);
+  if (typeof applyOutlineVisibility === 'function') applyOutlineVisibility();
   if (appliedMenuBar !== settings.menuBar) {
     appliedMenuBar = settings.menuBar;
     invoke('cmd_set_menu_visible', { visible: settings.menuBar }).catch((e) => console.error('menu bar', e));

@@ -470,6 +470,15 @@ function renderEditorOverlay() {
   }
   const doc = getActive();
   const text = editor.value;
+  if (text.length > HIGHLIGHT_MAX_CHARS) {
+    // Big file: plain text only. Decide before scanning the whole text on every keystroke.
+    if (editor.classList.contains('hl-active')) {
+      editor.classList.remove('hl-active');
+      editorHighlight.classList.add('hidden');
+      editorHighlight.innerHTML = '';
+    }
+    return;
+  }
   const info = langInfo(doc);
   const wantSpell = spell.enabled && info.prose && text.length <= SPELL_MAX_CHARS;
   const decos = doc && text === doc.content ? editorDecorations(doc) : [];
@@ -1265,6 +1274,7 @@ function syncFromEditor() {
   renderEditorOverlay();
   updateLineNumbers();
   updateCharCount();
+  scheduleOutline();
 }
 
 function syncFromPreview() {
@@ -1278,6 +1288,7 @@ function syncFromPreview() {
   updateLineNumbers();
   updateCharCount();
   schedulePreviewSpell();
+  scheduleOutline();
 }
 
 function loadActiveDocIntoPanes() {
@@ -1293,6 +1304,10 @@ function loadActiveDocIntoPanes() {
   updateStatusBar();
   updatePreviewModeButton();
   restoreDocView(doc);
+  updateDiskNotice();
+  updateFollowStatus();
+  syncMenuChecks();
+  if (settings.outline) renderOutline();
 }
 
 /* ---------- per-tab language / preview mode ---------- */
@@ -1452,7 +1467,8 @@ function renderTabs() {
     tab.className = 'tab' + (doc.id === activeId ? ' active' : '') + (doc.pinned ? ' pinned' : '') + (doc.dirty ? ' dirty' : '');
     tab.dataset.id = doc.id;
     tab.title =
-      (doc.path || tabTitle(doc)) + (doc.dirty ? '\nUnsaved changes' : '') + (doc.pinned ? '\nPinned' : '');
+      (doc.path || tabTitle(doc)) + (doc.dirty ? '\nUnsaved changes' : '') + (doc.pinned ? '\nPinned' : '') +
+      (doc.follow ? '\nFollowing: new lines appear as the file grows' : '') + (doc.missing ? '\nDeleted or moved on disk' : '');
 
     const dirty = document.createElement('span');
     dirty.className = 'tab-dirty';
@@ -1672,12 +1688,15 @@ function showTabMenu(x, y, doc) {
   showContextMenu(x, y, [
     { label: 'Save', icon: '\u{1F5AB}', gesture: doc.id === activeId ? 'Ctrl+S' : '', action: () => saveDocGeneric(doc) },
     { label: 'Save As...', icon: '\u{1F5AB}', gesture: doc.id === activeId ? 'Ctrl+Shift+S' : '', action: () => saveDocGeneric(doc, true) },
+    { label: 'Save All', gesture: 'Ctrl+Alt+S', disabled: !docs.some((d) => d.dirty), action: () => saveAll() },
+    { label: 'Reload from Disk', icon: '⟳', disabled: !doc.path, action: () => (doc.id === activeId ? reloadActiveFromDisk() : (setActiveTab(doc.id), reloadActiveFromDisk())) },
     'sep',
     { label: doc.pinned ? 'Unpin Tab' : 'Pin Tab', icon: '\u{1F4CC}', action: () => togglePin(doc.id) },
     'sep',
     { label: 'Close', icon: '✕', gesture: doc.id === activeId ? 'Ctrl+W' : '', action: () => closeTab(doc.id) },
     { label: 'Close Others (keeps pinned)', disabled: !others.length, action: () => closeMany(others) },
     { label: 'Close All (keeps pinned)', disabled: !unpinned.length, action: () => closeMany(unpinned) },
+    { label: 'Reopen Closed Tab', gesture: 'Ctrl+Shift+T', disabled: !closedTabs.length, action: () => reopenClosedTab() },
     'sep',
     { label: 'Copy Full Path', icon: '⧉', disabled: !doc.path, action: () => clipboard.writeText(doc.path) },
   ]);
@@ -1768,6 +1787,7 @@ async function closeTab(id) {
       if (!ok) return;
     }
   }
+  rememberClosedTab(doc); // Ctrl+Shift+T brings it back (with any unsaved text)
   removeDoc(id);
 }
 
@@ -1794,6 +1814,7 @@ function captureUi() {
     window: windowState,
     find: captureFindState(),
     settings,
+    recent: recentFiles,
   };
 }
 
@@ -1815,6 +1836,7 @@ function buildSession() {
       encoding: d.encoding,
       eol: d.eol,
       dirty: d.dirty,
+      follow: d.follow || undefined,
       // Saved files are re-read from disk on restore; only unsaved text needs storing.
       content: d.dirty || !d.path ? d.content : null,
     })),
@@ -1871,6 +1893,7 @@ function applyUi(ui) {
   }
   words.forEach((w) => spell.userWords.add(w));
   windowState = ui.window || null;
+  recentFiles = Array.isArray(ui.recent) ? ui.recent.filter((p) => typeof p === 'string').slice(0, 10) : [];
 }
 
 async function restoreDocs(s) {
@@ -1907,6 +1930,8 @@ async function restoreDocs(s) {
       } else if (fromDisk) {
         doc = makeDoc(d.path, fromDisk.text, opts);
       }
+      if (doc && disk) setDiskStat(doc, disk);
+      if (doc) doc.follow = !!d.follow;
     } else {
       // Untitled tabs come back even when empty, so a restart never removes a tab.
       let num = d.untitledNum;
@@ -2037,18 +2062,31 @@ async function saveDocGeneric(doc, forcePrompt) {
     });
     if (!path) return false;
   }
+  // Changed by another program since it was opened? Ask before overwriting it.
+  if (!(await confirmOverwriteIfChanged(doc, path))) return false;
   const out = doc.eol === 'crlf' ? doc.content.replace(/\n/g, '\r\n') : doc.content;
+  let st = null;
+  doc.saving = true; // the disk watcher must not mistake our own write for someone else's
   try {
-    await invoke('cmd_write_file', { path, content: out, encoding: doc.encoding });
+    st = await invoke('cmd_write_file', { path, content: out, encoding: doc.encoding });
   } catch (err) {
+    doc.saving = false;
     await dialogApi.message('Could not save "' + basename(path) + '":\n' + err, { title: 'Save', kind: 'error' });
     return false;
   }
+  doc.saving = false;
   const langChanged = doc.path !== path && !doc.langOverride && langForPath(path) !== doc.lang;
+  const newPath = !doc.path || !samePath(doc.path, path);
   doc.path = path;
   doc.savedContent = doc.content;
   doc.dirty = false;
+  setDiskStat(doc, st);
+  doc.conflict = null;
+  doc.missing = false;
+  doc.ignoredDisk = null;
   if (langChanged) doc.lang = langForPath(path);
+  if (newPath) addRecent(path);
+  updateDiskNotice();
   renderTabs();
   if (langChanged && doc.id === activeId) loadActiveDocIntoPanes();
   updateStatusBar();
@@ -2069,6 +2107,7 @@ async function openPath(path, { quiet = false } = {}) {
   const existing = docs.find((d) => d.path && samePath(d.path, path));
   if (existing) {
     setActiveTab(existing.id);
+    addRecent(existing.path);
     return existing;
   }
   let data;
@@ -2079,7 +2118,12 @@ async function openPath(path, { quiet = false } = {}) {
     return null;
   }
   const { text, eol } = normalizeEol(data.content);
-  const doc = makeDoc(data.path, text, { encoding: data.encoding, eol });
+  // Big files (logs) open in Edit Only; colouring, spelling and indent guides switch off by themselves.
+  const large = text.length > LARGE_FILE_CHARS;
+  const doc = makeDoc(data.path, text, { encoding: data.encoding, eol, layoutMode: large ? 'edit-only' : undefined });
+  setDiskStat(doc, data);
+  addRecent(data.path);
+  if (large) setTimeout(() => flashFindStatus('Large file (' + (data.size / 1048576).toFixed(1) + ' MB): opened in Edit Only, without colouring or spell checking.'), 50);
   const active = getActive();
   const idx = active ? docs.indexOf(active) : -1;
   if (active && !active.path && !active.dirty && active.content === '' && !active.pinned) {
@@ -2404,10 +2448,10 @@ function runToolbarCommand(cmd) {
       toggleLineNumbers();
       break;
     case 'bold':
-      pv ? previewExec('bold') : wrapEditorSelection('**', '**');
+      pv ? previewExec('bold') : toggleInlineFormat('bold') || wrapEditorSelection('**', '**');
       break;
     case 'italic':
-      pv ? previewExec('italic') : wrapEditorSelection('_', '_');
+      pv ? previewExec('italic') : toggleInlineFormat('italic') || wrapEditorSelection('_', '_');
       break;
     case 'strike':
       pv ? previewExec('strikeThrough') : wrapEditorSelection('~~', '~~');
@@ -2776,6 +2820,9 @@ function wireDomEvents() {
       if (mode) {
         e.preventDefault();
         setLayoutMode(mode);
+      } else if (e.code === 'KeyS' && !e.shiftKey) {
+        e.preventDefault();
+        saveAll();
       } else if (e.code === 'KeyM' || e.code === 'KeyB') {
         e.preventDefault();
         setPreviewMode(e.code === 'KeyM' ? 'markdown' : 'bbcode');
@@ -2790,6 +2837,24 @@ function wireDomEvents() {
     } else if (e.code === 'KeyE' && e.shiftKey) {
       e.preventDefault();
       toggleSidebar();
+    } else if (e.code === 'KeyT' && e.shiftKey) {
+      e.preventDefault();
+      reopenClosedTab();
+    } else if (e.code === 'KeyO' && e.shiftKey) {
+      e.preventDefault();
+      toggleOutline();
+    } else if (e.code === 'KeyG' && !e.shiftKey) {
+      e.preventDefault();
+      openGotoLine();
+    } else if (e.code === 'KeyP' && !e.shiftKey) {
+      e.preventDefault();
+      printActive();
+    } else if ((e.code === 'KeyB' || e.code === 'KeyI') && !e.shiftKey) {
+      // Bold / italic. In the editable preview the browser's own Ctrl+B / Ctrl+I already does it.
+      if (e.target === editor) {
+        e.preventDefault();
+        toggleInlineFormat(e.code === 'KeyB' ? 'bold' : 'italic');
+      } else if (e.target !== preview && !preview.contains(e.target)) e.preventDefault();
     } else if (key === 't') {
       e.preventDefault();
       toggleToolbar();
@@ -2858,6 +2923,8 @@ function currentMenuChecks() {
     spell_en_gb: spell.enabled && spell.lang === 'en_GB',
     spell_en_us: spell.enabled && spell.lang === 'en_US',
     toggle_theme: document.documentElement.getAttribute('data-theme') === 'dark',
+    outline: !!settings.outline,
+    follow_file: !!(doc && doc.follow),
   };
 }
 
@@ -2903,6 +2970,19 @@ function wireMenuListeners() {
   listen('menu-open', () => openFile());
   listen('menu-save', () => saveActive());
   listen('menu-save-as', () => saveActiveAs());
+  listen('menu-save-all', () => saveAll());
+  listen('menu-reopen-closed', () => reopenClosedTab());
+  listen('menu-reload-file', () => reloadActiveFromDisk());
+  listen('menu-print', () => printActive());
+  listen('menu-export-pdf', () => exportPdf());
+  listen('menu-export-html', () => exportHtml());
+  listen('menu-goto-line', () => openGotoLine());
+  listen('menu-fmt-bold', () => toggleInlineFormat('bold'));
+  listen('menu-fmt-italic', () => toggleInlineFormat('italic'));
+  listen('menu-outline', () => toggleOutline());
+  listen('menu-follow-file', () => toggleFollow());
+  listen('menu-recent-clear', () => clearRecent());
+  for (let i = 0; i < 10; i++) listen('menu-recent-' + i, () => openRecent(i));
   listen('menu-close-tab', () => closeTab(activeId));
   listen('menu-delete-file', () => deleteActiveFile());
   listen('menu-toolbar', () => toggleToolbar());
@@ -2949,6 +3029,8 @@ async function init() {
   wireMenuListeners();
   wireDragDrop();
   wireSettings();
+  initExtras();
+  setRecentFiles(recentFiles);
   applyTheme();
   applySettings();
   initSpell();

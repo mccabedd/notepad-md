@@ -2,6 +2,7 @@
 
 mod instance;
 mod linkmenu;
+mod printpdf;
 mod savedialog;
 mod system;
 
@@ -15,11 +16,35 @@ use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use std::collections::HashMap;
 use tauri::{Emitter, Manager, State, WindowEvent};
 
-/// Files larger than this are refused (the editor is not built for huge files).
-const MAX_FILE_BYTES: u64 = 20 * 1024 * 1024;
+/// Files larger than this are refused. Big files (logs) open in a lighter "large file" mode in the page.
+const MAX_FILE_BYTES: u64 = 100 * 1024 * 1024;
 
 /// View-menu items that show a tick; the page tells us when their state changes.
 struct MenuChecks(Mutex<HashMap<String, CheckMenuItem<tauri::Wry>>>);
+
+/// File > Recent Files (rebuilt by the page whenever the list changes).
+struct RecentMenu(Mutex<Option<Submenu<tauri::Wry>>>);
+
+#[derive(serde::Serialize, Clone, Copy)]
+struct FileStat {
+    mtime: u64,
+    size: u64,
+}
+
+/// Last-modified time (ms since 1970) and size, used to notice changes made by other programs.
+fn stat_of(path: &str) -> Option<FileStat> {
+    let m = fs::metadata(path).ok()?;
+    if !m.is_file() {
+        return None;
+    }
+    let mtime = m
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    Some(FileStat { mtime, size: m.len() })
+}
 
 struct AppState {
     initial_files: Mutex<Vec<PathBuf>>,
@@ -36,6 +61,8 @@ struct FileData {
     content: String,
     /// One of: utf8, utf8bom, utf16le, utf16be, latin1. Used to write the file back the same way.
     encoding: String,
+    mtime: u64,
+    size: u64,
 }
 
 fn decode(bytes: &[u8]) -> Result<(String, &'static str), String> {
@@ -91,14 +118,17 @@ fn read_file_data(path: &str) -> Result<FileData, String> {
         return Err("That is a folder, not a file".into());
     }
     if meta.len() > MAX_FILE_BYTES {
-        return Err("File is too large to open (over 20 MB)".into());
+        return Err("File is too large to open (over 100 MB)".into());
     }
     let bytes = fs::read(path).map_err(|e| e.to_string())?;
     let (content, encoding) = decode(&bytes)?;
+    let st = stat_of(path).unwrap_or(FileStat { mtime: 0, size: bytes.len() as u64 });
     Ok(FileData {
         path: path.to_string(),
         content,
         encoding: encoding.to_string(),
+        mtime: st.mtime,
+        size: st.size,
     })
 }
 
@@ -118,9 +148,38 @@ fn cmd_read_file(path: String) -> Result<FileData, String> {
 }
 
 #[tauri::command]
-fn cmd_write_file(path: String, content: String, encoding: Option<String>) -> Result<(), String> {
+fn cmd_write_file(path: String, content: String, encoding: Option<String>) -> Result<Option<FileStat>, String> {
     let bytes = encode(&content, encoding.as_deref().unwrap_or("utf8"));
-    fs::write(&path, bytes).map_err(|e| e.to_string())
+    fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    Ok(stat_of(&path))
+}
+
+/// Last-modified time and size of each file (None when it no longer exists).
+#[tauri::command]
+async fn cmd_file_stat(paths: Vec<String>) -> Vec<Option<FileStat>> {
+    paths.iter().map(|p| stat_of(p)).collect()
+}
+
+/// Rebuilds File > Recent Files (ids recent_0, recent_1, ...).
+#[tauri::command]
+async fn cmd_set_recent(app: tauri::AppHandle, state: State<'_, RecentMenu>, paths: Vec<String>) -> Result<(), String> {
+    let menu = state.0.lock().map_err(|e| e.to_string())?.clone();
+    let Some(menu) = menu else { return Ok(()) };
+    let e = |e: tauri::Error| e.to_string();
+    for item in menu.items().map_err(e)? {
+        menu.remove(&item).map_err(e)?;
+    }
+    if paths.is_empty() {
+        menu.append(&MenuItem::with_id(&app, "recent_none", "(No recent files)", false, None::<&str>).map_err(e)?).map_err(e)?;
+    }
+    for (i, p) in paths.iter().take(10).enumerate() {
+        // "&1 C:\path\file.md": the number is the keyboard shortcut; a real "&" must be doubled.
+        let label = format!("&{} {}", (i + 1) % 10, p.replace('&', "&&"));
+        menu.append(&MenuItem::with_id(&app, format!("recent_{i}"), label, true, None::<&str>).map_err(e)?).map_err(e)?;
+    }
+    menu.append(&PredefinedMenuItem::separator(&app).map_err(e)?).map_err(e)?;
+    menu.append(&MenuItem::with_id(&app, "recent_clear", "Clear Recent Files", !paths.is_empty(), None::<&str>).map_err(e)?).map_err(e)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -256,6 +315,9 @@ fn main() {
             cmd_set_menu_visible,
             cmd_set_menu_checks,
             cmd_rename_file,
+            cmd_file_stat,
+            cmd_set_recent,
+            printpdf::cmd_print_to_pdf,
             linkmenu::cmd_set_hover_link,
             system::cmd_app_info,
             system::cmd_register_file_types,
@@ -276,6 +338,13 @@ fn main() {
             }
             // Accelerator strings below are display-only hint text: every shortcut is actually
             // handled by the JS keydown handler in ui/renderer.js.
+            let recent_submenu = Submenu::with_items(
+                app,
+                "Recent Files",
+                true,
+                &[&MenuItem::with_id(app, "recent_none", "(No recent files)", false, None::<&str>)?],
+            )?;
+            app.manage(RecentMenu(Mutex::new(Some(recent_submenu.clone()))));
             let file_submenu = Submenu::with_items(
                 app,
                 "File",
@@ -283,6 +352,9 @@ fn main() {
                 &[
                     &MenuItem::with_id(app, "new", "New", true, Some("CmdOrCtrl+N"))?,
                     &MenuItem::with_id(app, "open", "Open...", true, Some("CmdOrCtrl+O"))?,
+                    &recent_submenu,
+                    &MenuItem::with_id(app, "reopen_closed", "Reopen Closed Tab", true, Some("CmdOrCtrl+Shift+T"))?,
+                    &MenuItem::with_id(app, "reload_file", "Reload from Disk", true, None::<&str>)?,
                     &PredefinedMenuItem::separator(app)?,
                     &MenuItem::with_id(app, "save", "Save", true, Some("CmdOrCtrl+S"))?,
                     &MenuItem::with_id(
@@ -292,6 +364,11 @@ fn main() {
                         true,
                         Some("CmdOrCtrl+Shift+S"),
                     )?,
+                    &MenuItem::with_id(app, "save_all", "Save All", true, Some("CmdOrCtrl+Alt+S"))?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &MenuItem::with_id(app, "print", "Print...", true, Some("CmdOrCtrl+P"))?,
+                    &MenuItem::with_id(app, "export_pdf", "Export as PDF...", true, None::<&str>)?,
+                    &MenuItem::with_id(app, "export_html", "Export as HTML...", true, None::<&str>)?,
                     &PredefinedMenuItem::separator(app)?,
                     &MenuItem::with_id(app, "close_tab", "Close Tab", true, Some("CmdOrCtrl+W"))?,
                     &MenuItem::with_id(app, "delete_file", "Delete File", true, None::<&str>)?,
@@ -314,6 +391,10 @@ fn main() {
                     &PredefinedMenuItem::copy(app, None)?,
                     &PredefinedMenuItem::paste(app, None)?,
                     &PredefinedMenuItem::select_all(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &MenuItem::with_id(app, "goto_line", "Go to Line...", true, Some("CmdOrCtrl+G"))?,
+                    &MenuItem::with_id(app, "fmt_bold", "Bold", true, Some("CmdOrCtrl+B"))?,
+                    &MenuItem::with_id(app, "fmt_italic", "Italic", true, Some("CmdOrCtrl+I"))?,
                 ],
             )?;
 
@@ -377,8 +458,10 @@ fn main() {
                     // "Alt" alone is not a valid accelerator, so the hint is part of the title.
                     &check("menu_bar", "Menu Bar\tAlt", None)?,
                     &check("status_bar", "Status Bar", None)?,
+                    &check("outline", "Outline", Some("CmdOrCtrl+Shift+O"))?,
                     &check("word_wrap", "Word Wrap", Some("Alt+Z"))?,
                     &check("toggle_line_numbers", "Line Numbers", Some("CmdOrCtrl+Shift+L"))?,
+                    &check("follow_file", "Follow File (Tail)", None)?,
                     &PredefinedMenuItem::separator(app)?,
                     // Order (and Ctrl+Alt+1..4): Edit, Preview, Edit/Preview, Preview/Edit.
                     &check("layout_edit_only", "Edit Only", Some("CmdOrCtrl+Alt+1"))?,

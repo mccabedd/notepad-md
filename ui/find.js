@@ -610,7 +610,7 @@ function bookmarksChanged() {
   }
 }
 
-/** Ctrl+B in the grid: bookmark (green) the selection, or remove if every selected row already is one. */
+/** Ctrl+Shift+B in the grid: bookmark (green) the selection, or remove if every selected row already is one. */
 function toggleSelectedBookmarks() {
   const rows = selectedRows();
   if (!rows.length) return;
@@ -682,7 +682,7 @@ function navigateBookmarkBlock(dir) {
     }
   }
   if (!groups.length) {
-    advStatus.textContent = 'No bookmarks yet. Right-click a row (or press Ctrl+B) to bookmark it.';
+    advStatus.textContent = 'No bookmarks yet. Right-click a row (or press Ctrl+Shift+B) to bookmark it.';
     return;
   }
   const cur = findState.rows[findState.current];
@@ -1115,9 +1115,9 @@ function showRowMenu(x, y, rowEl, col) {
     label: common ? 'Bookmark  ·  ' + common : 'Bookmark',
     icon: '⚑',
     submenu: [
-      ...BOOKMARK_COLOURS.map((col2) => ({ label: col2, dot: col2.toLowerCase(), checked: common === col2, gesture: col2 === 'Green' ? 'Ctrl+B' : '', action: () => setRowsBookmark(rows, col2) })),
+      ...BOOKMARK_COLOURS.map((col2) => ({ label: col2, dot: col2.toLowerCase(), checked: common === col2, gesture: col2 === 'Green' ? 'Ctrl+Shift+B' : '', action: () => setRowsBookmark(rows, col2) })),
       'sep',
-      { label: many ? 'Remove bookmarks from selection' : 'Remove bookmark', icon: '✕', gesture: 'Ctrl+Shift+B', disabled: !many && !common, action: () => setRowsBookmark(rows, null) },
+      { label: many ? 'Remove bookmarks from selection' : 'Remove bookmark', icon: '✕', disabled: !many && !common, action: () => setRowsBookmark(rows, null) },
       { label: 'Clear all bookmarks in this file…', icon: '⌫', disabled: !Object.keys(r.doc.bookmarks || {}).length, action: () => clearAllBookmarks(r.doc) },
     ],
   });
@@ -1182,10 +1182,8 @@ function onGridKeyDown(e) {
   else if (e.key === 'Delete' && !ctrl) removeRows(selectedRows());
   else if (ctrl && !e.shiftKey && !e.altKey && e.code === 'KeyA') selectAllRows();
   else if (ctrl && !e.altKey && e.code === 'KeyC') copyRows(selectedRows(), e.shiftKey ? 'numbers' : 'text');
-  else if (ctrl && !e.altKey && e.code === 'KeyB') {
-    if (e.shiftKey) setRowsBookmark(selectedRows(), null);
-    else toggleSelectedBookmarks();
-  } else if (e.key === 'Escape') {
+  else if (ctrl && e.shiftKey && !e.altKey && e.code === 'KeyB') toggleSelectedBookmarks();
+  else if (e.key === 'Escape') {
     if (layoutMode === 'preview-only') preview.focus();
     else editor.focus();
   } else handled = false;
