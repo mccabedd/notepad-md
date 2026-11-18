@@ -907,41 +907,100 @@ function toggleInlineFormat(kind) {
   return true;
 }
 
-/* ---------- log file colouring (log.txt, or View > Language > Log File) ---------- */
+/* ---------- colouring big files in the editor ---------- */
 
-function registerLogLanguage() {
-  if (!window.hljs || hljs.getLanguage('logfile')) return;
-  hljs.registerLanguage('logfile', () => {
-    const level = (cls, words) => ({ className: cls, begin: '\\b(?:' + words + ')\\b', relevance: 0 });
-    const ERROR = level('logerror', 'error|errors|err|fatal|critical|crit|severe|alert|emerg|panic|failed|failure|fail|exception|[\\w.$]*(?:exception|error)');
-    const WARN = level('logwarn', 'warning|warn|wrn|caution|timeout|timed out|retrying|retry');
-    const INFO = level('loginfo', 'info|inf|information|notice');
-    const DEBUG = level('logdebug', 'debug|dbg|trace|trc|verbose|vrb|fine|finer|finest');
-    const OK = level('logok', 'ok|success|successful|successfully|succeeded|passed|completed|done|started|connected');
-    const TIME = {
-      className: 'logtime',
-      relevance: 0,
-      variants: [
-        { begin: '\\b\\d{4}-\\d{2}-\\d{2}(?:[ T]\\d{2}:\\d{2}(?::\\d{2}(?:[.,]\\d+)?)?(?:Z|[+-]\\d{2}:?\\d{2})?)?\\b' },
-        { begin: '\\b\\d{4}\\d{2}\\d{2}T\\d{6}(?:[.,]\\d+)?\\b' },
-        { begin: '\\b\\d{1,2}[/.]\\d{1,2}[/.]\\d{2,4}(?: \\d{1,2}:\\d{2}(?::\\d{2}(?:[.,]\\d+)?)?(?: ?[AP]M)?)?\\b' },
-        { begin: '\\b\\d{1,2}:\\d{2}:\\d{2}(?:[.,]\\d+)?\\b' },
-      ],
+// Above HIGHLIGHT_MAX_CHARS the editor can't recolour on every keystroke (a 3 MB log takes ~1.5 s).
+// Instead it shows plain text while you type and colours the whole file once you pause, in a
+// background worker. The result is kept per tab, so switching back is instant. Find hits and
+// bookmarks are not drawn in this mode (the selection still shows where you are).
+const LAZY_HIGHLIGHT_MAX = 4 * 1024 * 1024; // drawing more takes the browser several seconds
+const LAZY_DELAY = 500;
+let lazyTimer = 0;
+let lazyReq = 0;
+let lazyShown = null; // { docId, text, lang } currently drawn in the overlay
+
+function hideOverlay() {
+  editor.classList.remove('hl-active');
+  editorHighlight.classList.add('hidden');
+  editorHighlight.innerHTML = '';
+  lazyShown = null;
+}
+
+function showLargeOverlay(doc, text, lang, html) {
+  editorHighlight.innerHTML = html + (text.endsWith('\n') ? ' ' : '');
+  editorHighlight.classList.remove('hidden');
+  editor.classList.add('hl-active');
+  editorHighlight.scrollTop = editor.scrollTop;
+  editorHighlight.scrollLeft = editor.scrollLeft;
+  lazyShown = { docId: doc.id, text, lang };
+}
+
+/** renderEditorOverlay() for text over HIGHLIGHT_MAX_CHARS. */
+function renderLargeOverlay(doc, text, info) {
+  if (!doc || !info.hljs || text.length > LAZY_HIGHLIGHT_MAX) {
+    clearTimeout(lazyTimer);
+    if (editor.classList.contains('hl-active') || lazyShown) hideOverlay();
+    return;
+  }
+  if (lazyShown && lazyShown.docId === doc.id && lazyShown.lang === info.hljs && lazyShown.text === text) return; // already coloured
+  const cached = doc.hlCache;
+  if (cached && cached.lang === info.hljs && cached.text === text) {
+    // Already coloured before (e.g. switching back to this tab): let the tab appear first.
+    if (editor.classList.contains('hl-active') || lazyShown) hideOverlay();
+    clearTimeout(lazyTimer);
+    lazyTimer = setTimeout(() => {
+      if (doc.id === activeId && editor.value === text && langInfo(doc).hljs === info.hljs) showLargeOverlay(doc, text, info.hljs, cached.html);
+    }, 150);
+    return;
+  }
+  if (editor.classList.contains('hl-active') || lazyShown) hideOverlay(); // plain text while typing
+  clearTimeout(lazyTimer);
+  lazyTimer = setTimeout(() => colourLargeDoc(doc), LAZY_DELAY);
+}
+
+async function colourLargeDoc(doc) {
+  if (!docs.includes(doc) || doc.id !== activeId) return;
+  const text = editor.value;
+  const info = langInfo(doc);
+  if (text.length <= HIGHLIGHT_MAX_CHARS || text.length > LAZY_HIGHLIGHT_MAX || !info.hljs) return;
+  const id = ++lazyReq;
+  let html = null;
+  try {
+    html = await highlightInWorker(text, info.hljs);
+  } catch (e) {
+    html = null;
+  }
+  if (id !== lazyReq || doc.id !== activeId || editor.value !== text || langInfo(doc).hljs !== info.hljs) return; // changed meanwhile
+  if (html === null) html = highlightCode(text, info.hljs); // a language only the page knows (BBCode)
+  if (/(^|\n)[ \t]/.test(text)) html = addIndentGuides(html);
+  doc.hlCache = { text, lang: info.hljs, html };
+  showLargeOverlay(doc, text, info.hljs, html);
+}
+
+let hlWorker = null;
+let hlSeq = 0;
+const hlWaiters = new Map();
+
+function highlightInWorker(text, lang) {
+  if (!hlWorker) {
+    hlWorker = new Worker('highlight-worker.js');
+    hlWorker.onmessage = (e) => {
+      const w = hlWaiters.get(e.data.id);
+      if (w) {
+        hlWaiters.delete(e.data.id);
+        w.resolve(e.data.html);
+      }
     };
-    const GUID = { className: 'number', begin: '\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b', relevance: 0 };
-    // numbers, also with a unit stuck on (512MB, 30s, 250ms, 99%)
-    const NUMBER = { className: 'number', begin: '\\b(?:0x[0-9a-f]+|\\d+(?:\\.\\d+)*(?:[kmgt]?b|ms|s|%)?)(?![\\w.])', relevance: 0 };
-    const STRING = { className: 'string', variants: [{ begin: '"', end: '"', illegal: '\\n' }, { begin: "'(?=[^'\\n]{1,200}')", end: "'", illegal: '\\n' }], relevance: 0 };
-    // key=value or key:value (no space after the colon, so "space low: free" stays plain text)
-    const KEY = { className: 'attr', begin: '\\b[A-Za-z_][\\w.-]*(?=(?:\\s?=\\s?|:)[^\\s/])', relevance: 0 };
-    const PATH = { className: 'logpath', begin: '\\b[a-z]:\\\\[^\\s"\'<>|]*', relevance: 0 };
-    const BRACKET = { className: 'meta', begin: '\\[', end: '\\]', illegal: '\\n', contains: [ERROR, WARN, INFO, DEBUG, OK, TIME, NUMBER], relevance: 0 };
-    const STACK = { className: 'comment', begin: '^\\s+at\\s', end: '$', relevance: 0 };
-    return {
-      name: 'Log file',
-      case_insensitive: true,
-      contains: [STACK, TIME, GUID, BRACKET, STRING, PATH, ERROR, WARN, INFO, DEBUG, OK, KEY, NUMBER],
+    hlWorker.onerror = (err) => {
+      for (const w of hlWaiters.values()) w.reject(err);
+      hlWaiters.clear();
+      hlWorker = null;
     };
+  }
+  const id = ++hlSeq;
+  return new Promise((resolve, reject) => {
+    hlWaiters.set(id, { resolve, reject });
+    hlWorker.postMessage({ id, text, lang });
   });
 }
 

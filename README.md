@@ -7,7 +7,7 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 ## Features
 
 ### Files and tabs
-- New / Open / Save / Save As / **Save All** (`Ctrl+Alt+S`) / Delete File via the File menu; Open accepts several files at once. Files can also be **dragged onto the window** or passed on the command line. Files up to 100 MB open; files over 5 MB (big logs) open in Edit Only, without colouring or spell checking, so they stay quick.
+- New / Open / Save / Save As / **Save All** (`Ctrl+Alt+S`) / Delete File via the File menu; Open accepts several files at once. Files can also be **dragged onto the window** or passed on the command line. Files up to 100 MB open; files over 5 MB (big logs) open in Edit Only without spell checking. Files over about 300,000 characters (up to 4 MB) are coloured in the background: the text shows plainly while you type and the colours return a moment after you pause. Above 4 MB the editor shows plain text. Typing in multi-megabyte files is slow (a limit of the browser's text box).
 - **Recent Files** (File menu) lists the last 10 files you opened or saved; **Reopen Closed Tab** (`Ctrl+Shift+T`) brings back tabs you closed, including any unsaved text.
 - **Files changed by other programs** — Notepad MD notices when an open file is changed, deleted or moved outside it. A tab without unsaved edits simply reloads; one with unsaved edits shows a bar asking whether to reload or keep your version. Save never silently overwrites a file someone else changed: it asks first. **File > Reload from Disk** re-reads a file on demand.
 - **Follow File (Tail)** (View menu) — for log files: new lines appear as the file grows, and the view stays at the end. The status bar shows *Following*; click it to stop.

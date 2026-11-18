@@ -474,14 +474,13 @@ function renderEditorOverlay() {
   const doc = getActive();
   const text = editor.value;
   if (text.length > HIGHLIGHT_MAX_CHARS) {
-    // Big file: plain text only. Decide before scanning the whole text on every keystroke.
-    if (editor.classList.contains('hl-active')) {
-      editor.classList.remove('hl-active');
-      editorHighlight.classList.add('hidden');
-      editorHighlight.innerHTML = '';
-    }
+    // Big file: coloured in the background once typing pauses (extras.js). Decided before
+    // scanning the whole text on every keystroke.
+    renderLargeOverlay(doc, text, langInfo(doc));
     return;
   }
+  lazyShown = null;
+  clearTimeout(lazyTimer);
   const info = langInfo(doc);
   const wantSpell = spell.enabled && info.prose && text.length <= SPELL_MAX_CHARS;
   const decos = doc && text === doc.content ? editorDecorations(doc) : [];
@@ -1263,16 +1262,28 @@ function renderPreview(doc) {
   if (typeof refreshPreviewFindHighlights === 'function') refreshPreviewFindHighlights(false);
 }
 
-function renderPreviewIfVisible(doc) {
-  if (previewVisible()) renderPreview(doc);
-  else previewStale = true;
+let largePreviewTimer = 0;
+function renderPreviewIfVisible(doc, typing) {
+  clearTimeout(largePreviewTimer);
+  if (!previewVisible()) {
+    previewStale = true;
+    return;
+  }
+  // A big file's preview takes a second or more to build: while typing, wait for a pause.
+  if (typing && doc.content.length > HIGHLIGHT_MAX_CHARS) {
+    largePreviewTimer = setTimeout(() => {
+      if (doc.id === activeId && previewVisible()) renderPreview(doc);
+    }, 700);
+    return;
+  }
+  renderPreview(doc);
 }
 
 function syncFromEditor() {
   const doc = getActive();
   if (!doc) return;
   doc.content = editor.value;
-  renderPreviewIfVisible(doc);
+  renderPreviewIfVisible(doc, true);
   markDirty(doc);
   renderEditorOverlay();
   updateLineNumbers();
@@ -2128,7 +2139,7 @@ async function openPath(path, { quiet = false } = {}) {
   const doc = makeDoc(data.path, text, { encoding: data.encoding, eol, layoutMode: large ? 'edit-only' : undefined });
   setDiskStat(doc, data);
   addRecent(data.path);
-  if (large) setTimeout(() => flashFindStatus('Large file (' + (data.size / 1048576).toFixed(1) + ' MB): opened in Edit Only, without colouring or spell checking.'), 50);
+  if (large) setTimeout(() => flashFindStatus('Large file (' + (data.size / 1048576).toFixed(1) + ' MB): opened in Edit Only, without spell checking. Colours appear when you pause typing.'), 50);
   const active = getActive();
   const idx = active ? docs.indexOf(active) : -1;
   if (active && !active.path && !active.dirty && active.content === '' && !active.pinned) {
