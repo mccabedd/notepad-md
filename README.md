@@ -27,7 +27,7 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 - Show/hide the **menu bar** (tap `Alt`), **sidebar** (`Ctrl+Shift+E`), **toolbar** (`Ctrl+T`) and **status bar** (View menu).
 - Light / dark theme (`Ctrl+Shift+D`) or follow Windows.
 - The **View** menu shows a tick next to whatever is on (toolbar, word wrap, line numbers, current layout, preview mode, spelling, dark theme). Menus: File, Edit, View, Search, About.
-- Line numbers (`Ctrl+Shift+L`); bookmarked lines are shown in their bookmark colour.
+- Line numbers (`Ctrl+Shift+L`) beside the editor (not the preview); bookmarked lines are shown in their bookmark colour.
 
 ### Editing
 - Edit directly in the rendered Markdown preview — changes sync back to the Markdown source, and vice versa.

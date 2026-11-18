@@ -35,4 +35,4 @@ If you have an earlier version, open **About → About Notepad MD → Check for 
 ### Download
 **[NotepadMD-v1.0.3-win-x64.exe](https://github.com/mccabedd/notepad-md/releases/download/v1.0.3/NotepadMD-v1.0.3-win-x64.exe)** is portable, so just download it and run it. It needs Windows 10 or 11 (64-bit).
 
-- **SHA-256:** `8D79F5CEC30413C0492959C456EAB876149F875CA9F9B81A361198BD2A6BB38F`
+- **SHA-256:** `7F3C329A0B7FECF8000BA1988CBD4D47CC5876A698F785891734BB7B4F68A466`

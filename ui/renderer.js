@@ -407,7 +407,7 @@ function setLineNumbersVisible(visible) {
   syncMenuChecks();
   lineNumbersVisible = visible;
   lineNumbersEl.classList.toggle('hidden', !visible);
-  lineNumbersPreviewEl.classList.toggle('hidden', !visible);
+  lineNumbersPreviewEl.classList.add('hidden'); // line numbers belong to the editor only, not the preview
   updateLineNumbers();
 }
 
@@ -431,8 +431,6 @@ function updateLineNumbers() {
   const html = parts.join('\n');
   lineNumbersEl.innerHTML = html;
   lineNumbersEl.scrollTop = editor.scrollTop;
-  lineNumbersPreviewEl.innerHTML = html;
-  lineNumbersPreviewEl.scrollTop = preview.scrollTop;
 }
 
 /* ---------- syntax highlighting ---------- */
