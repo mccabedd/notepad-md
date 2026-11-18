@@ -147,7 +147,7 @@ body {
   cursor: default;
   user-select: none;
   color: var(--fg-muted);
-  font-size: 12.5px;
+  font-size: var(--tab-font-size, 12.5px);
   white-space: nowrap;
 }
 
@@ -1596,4 +1596,42 @@ body.tab-dragging * {
 }
 .tab.active.drop-after {
   box-shadow: inset 0 3px 0 var(--tab-active-bar), inset -3px 0 0 var(--tab-active-bar);
+}
+
+/* Native controls and scrollbars follow the app theme (dark scrollbars in the dark theme). */
+:root[data-theme="light"] { color-scheme: light; --indent-guide: rgba(0, 0, 0, 0.16); }
+:root[data-theme="dark"] { color-scheme: dark; --indent-guide: rgba(255, 255, 255, 0.16); }
+
+* {
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+/* Indent guides in the editor: a faint line at the start of each indent step (like Notepad++).
+   A background, not a border, so the coloured layer keeps exactly the textarea's text widths. */
+.editor-highlight .ig {
+  background-image: linear-gradient(to right, var(--indent-guide) 1px, transparent 1px);
+}
+
+/* Links in the editor: underlined; Ctrl+click opens them in the browser. */
+.editor-highlight .ov-url {
+  text-decoration: underline;
+  text-decoration-color: var(--hl-link);
+  text-underline-offset: 2px;
+}
+
+body.ctrl-down .editor.over-url {
+  cursor: pointer;
+}
+
+/* Renaming a tab (double-click its name). */
+.tab-rename {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 0 3px;
+  min-width: 60px;
+  width: 140px;
+  outline: none;
 }

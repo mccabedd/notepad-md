@@ -121,14 +121,36 @@ function defaultLayoutFor(lang) {
 /* ---------- markdown engine ---------- */
 
 function setupMarkdownEngine() {
-  marked_.setOptions({ gfm: true, breaks: false });
+  // breaks: every new line in the source is a new line in the preview (like Obsidian), so a
+  // list of links or log lines isn't run together into one paragraph. A <br> written back from
+  // the preview becomes a plain new line again (br: '').
+  marked_.setOptions({ gfm: true, breaks: true });
   turndownService = new TurndownService({
     headingStyle: 'atx',
     hr: '---',
     bulletListMarker: '-',
     codeBlockStyle: 'fenced',
+    br: '',
   });
   turndownService.use(turndownPluginGfm.gfm);
+  // "- item" / "1. item" with one space (Turndown's own rule writes "-   item", which made list
+  // indents grow every time the preview was edited). Nested lists are indented to the text.
+  turndownService.addRule('compactListItem', {
+    filter: 'li',
+    replacement: (content, node) => {
+      let prefix = '- ';
+      const parent = node.parentNode;
+      if (parent.nodeName === 'OL') {
+        const start = parent.getAttribute('start');
+        const index = Array.prototype.indexOf.call(parent.children, node);
+        prefix = (start ? Number(start) + index : index + 1) + '. ';
+      }
+      const isParagraph = /\n$/.test(content);
+      content = content.replace(/^\n+/, '').replace(/\n+$/, '') + (isParagraph ? '\n' : '');
+      content = content.replace(/\n/gm, '\n' + ' '.repeat(prefix.length));
+      return prefix + content + (node.nextSibling ? '\n' : '');
+    },
+  });
   turndownService.addRule('underline', {
     filter: ['u'],
     replacement: (content) => '<u>' + content + '</u>',
@@ -140,6 +162,16 @@ function setupMarkdownEngine() {
       const alt = (node.getAttribute('alt') || '').replace(/[[\]]/g, '');
       const title = node.getAttribute('title');
       return '![' + alt + '](' + node.getAttribute('data-md-src') + (title ? ' "' + title.replace(/"/g, '\\"') + '"' : '') + ')';
+    },
+  });
+  // A bare link in the source (https://... on its own) stays bare, instead of becoming
+  // [https://...](https://...) whenever the preview is edited. If its text was edited in the
+  // preview, the edited text is the link.
+  turndownService.addRule('bareLink', {
+    filter: (node) => node.nodeName === 'A' && node.hasAttribute('data-bare'),
+    replacement: (content, node) => {
+      const t = node.textContent.trim();
+      return /^(https?:\/\/|www\.)\S+$/i.test(t) || /^[^\s@]+@[^\s@]+$/.test(t) ? t : content;
     },
   });
   turndownService.addRule('codeCopyButton', {
@@ -172,7 +204,9 @@ function normalizeEol(text) {
 }
 
 function tabTitle(doc) {
-  return doc.path ? basename(doc.path) : 'Untitled' + (doc.untitledNum > 1 ? ' ' + doc.untitledNum : '');
+  if (doc.path) return basename(doc.path);
+  if (doc.customTitle) return doc.customTitle;
+  return 'Untitled' + (doc.untitledNum > 1 ? ' ' + doc.untitledNum : '');
 }
 
 function getActive() {
@@ -205,6 +239,7 @@ function makeDoc(path, content, opts = {}) {
     encoding: opts.encoding || 'utf8',
     eol: opts.eol || 'lf',
     view: null, // remembered scroll/selection when switching tabs
+    customTitle: opts.customTitle || null, // an untitled tab the user renamed
   };
   doc.lastContent = doc.content;
   if (!doc.path) {
@@ -232,6 +267,7 @@ function newUntitledDoc() {
 /* ---------- theme ---------- */
 
 function applyTheme() {
+  syncMenuChecks();
   const mode = themeOverride || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   document.documentElement.setAttribute('data-theme', mode);
   statusTheme.textContent = mode === 'dark' ? 'Dark' : 'Light';
@@ -294,6 +330,7 @@ function previewVisible() {
 }
 
 function applyLayout(mode) {
+  syncMenuChecks();
   layoutMode = mode;
   editorPane.style.flexBasis = '';
   previewPane.style.flexBasis = '';
@@ -356,6 +393,7 @@ function setupResizer() {
 /* ---------- toolbar / line numbers ---------- */
 
 function setToolbarVisible(visible) {
+  syncMenuChecks();
   toolbarEl.classList.toggle('hidden', !visible);
 }
 
@@ -366,6 +404,7 @@ function toggleToolbar() {
 }
 
 function setLineNumbersVisible(visible) {
+  syncMenuChecks();
   lineNumbersVisible = visible;
   lineNumbersEl.classList.toggle('hidden', !visible);
   lineNumbersPreviewEl.classList.toggle('hidden', !visible);
@@ -436,7 +475,9 @@ function renderEditorOverlay() {
   const info = langInfo(doc);
   const wantSpell = spell.enabled && info.prose && text.length <= SPELL_MAX_CHARS;
   const decos = doc && text === doc.content ? editorDecorations(doc) : [];
-  const useOverlay = !!doc && text.length <= HIGHLIGHT_MAX_CHARS && (!!info.hljs || wantSpell || decos.length > 0);
+  const hasIndent = /(^|\n)[ \t]/.test(text);
+  const hasUrl = URL_RE_TEST.test(text);
+  const useOverlay = !!doc && text.length <= HIGHLIGHT_MAX_CHARS && (!!info.hljs || wantSpell || decos.length > 0 || hasIndent || hasUrl);
   editor.classList.toggle('hl-active', useOverlay);
   editorHighlight.classList.toggle('hidden', !useOverlay);
   if (!useOverlay) {
@@ -444,10 +485,262 @@ function renderEditorOverlay() {
     return;
   }
   let html = info.hljs ? highlightCode(text, info.hljs) : escapeHtml(text);
-  if (wantSpell || decos.length) html = decorateOverlay(html, decos, wantSpell);
+  const urls = hasUrl ? urlRanges(text) : [];
+  const lists = urls.length ? [...decos, urls] : decos;
+  if (wantSpell || lists.length) html = decorateOverlay(html, lists, wantSpell, urls);
+  if (hasIndent) html = addIndentGuides(html);
   // A trailing newline makes the textarea show an extra empty line; give the <pre> one too.
   editorHighlight.innerHTML = html + (text.endsWith('\n') ? ' ' : '');
   editorHighlight.scrollTop = editor.scrollTop;
+}
+
+/* ---------- indent guides and links in the editor ---------- */
+
+const URL_RE_TEST = /https?:\/\/[^\s<>"]/;
+const URL_RE = /https?:\/\/[^\s<>"'`]+/g;
+
+/** Trailing punctuation is usually the sentence, not the link: "see https://x.com/a." */
+function trimUrl(u) {
+  const strip = (s) => s.replace(/[.,;:!?*_\]}>]+$/, '');
+  let s = strip(u);
+  // a ")" closes the link only if it has a matching "(" inside it (Wikipedia-style links)
+  while (s.endsWith(')') && (s.match(/\(/g) || []).length < (s.match(/\)/g) || []).length) s = strip(s.slice(0, -1));
+  return s;
+}
+
+/** Links in the text as decoration ranges (underlined in the coloured layer, never spell-checked). */
+function urlRanges(text) {
+  const out = [];
+  URL_RE.lastIndex = 0;
+  let m;
+  while ((m = URL_RE.exec(text)) && out.length < 5000) {
+    const url = trimUrl(m[0]);
+    out.push({ s: m.index, e: m.index + url.length, cls: 'ov-url' });
+  }
+  return out;
+}
+
+/** Faint vertical guides at each indent step of a line's leading spaces/tabs. */
+function addIndentGuides(html) {
+  const tw = settings.tabSize || 4;
+  // the indent may sit just inside a colouring <span> that starts the line
+  return html.replace(/(^|\n)((?:<span[^>]*>)*)([ \t]+)/g, (m, nl, tags, ws) => {
+    let out = '';
+    let unit = '';
+    let col = 0;
+    for (const ch of ws) {
+      unit += ch;
+      col = ch === '\t' ? (Math.floor(col / tw) + 1) * tw : col + 1;
+      if (col % tw === 0) {
+        out += '<span class="ig">' + unit + '</span>';
+        unit = '';
+      }
+    }
+    return nl + tags + out + unit;
+  });
+}
+
+/** The link (if any) around character offset `pos` of the editor text. */
+function urlAtOffset(text, pos) {
+  const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+  let lineEnd = text.indexOf('\n', pos);
+  if (lineEnd === -1) lineEnd = text.length;
+  const line = text.slice(lineStart, lineEnd);
+  URL_RE.lastIndex = 0;
+  let m;
+  while ((m = URL_RE.exec(line))) {
+    const url = trimUrl(m[0]);
+    const s = lineStart + m.index;
+    if (pos >= s && pos <= s + url.length) return url;
+  }
+  return null;
+}
+
+function openUrl(url) {
+  invoke('cmd_open_url', { url }).catch((e) => flashFindStatus('Could not open the link: ' + e));
+}
+
+/* ---------- Tab key ---------- */
+
+/** Tab inserts a tab; with several lines selected, Tab / Shift+Tab indent / outdent them. */
+function editorTabKey(outdent) {
+  const value = editor.value;
+  const start = editor.selectionStart;
+  const end = editor.selectionEnd;
+  const multi = value.slice(start, end).includes('\n');
+  if (!multi && !outdent) {
+    replaceEditorRange(start, end, '\t');
+    return;
+  }
+  const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+  // a selection ending at the very start of a line doesn't include that line
+  let blockEnd = end > start && value[end - 1] === '\n' ? end - 1 : end;
+  let lineEnd = value.indexOf('\n', blockEnd);
+  if (lineEnd === -1) lineEnd = value.length;
+  const tw = settings.tabSize || 4;
+  const lines = value.slice(lineStart, lineEnd).split('\n');
+  const outdentRe = new RegExp('^(\\t| {1,' + tw + '})');
+  const changed = lines.map((l) => (outdent ? l.replace(outdentRe, '') : l === '' ? l : '\t' + l)).join('\n');
+  if (changed === lines.join('\n')) return;
+  replaceEditorRange(lineStart, lineEnd, changed);
+  if (multi) editor.setSelectionRange(lineStart, lineStart + changed.length);
+  else {
+    const caret = Math.max(lineStart, start - (lines[0].length - changed.split('\n')[0].length));
+    editor.setSelectionRange(caret, caret);
+  }
+}
+
+function selectionNode() {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return null;
+  const n = sel.anchorNode;
+  return n && n.nodeType === 1 ? n : n && n.parentElement;
+}
+
+function placeCaret(node, offset) {
+  const sel = window.getSelection();
+  const r = document.createRange();
+  r.setStart(node, offset);
+  r.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
+
+/** Moves a list item into / out of a nested list, keeping the caret where it was. */
+function nestListItem(li, outdent) {
+  const sel = window.getSelection();
+  const saved = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+  const list = li.parentElement;
+  if (!outdent) {
+    const prev = li.previousElementSibling;
+    if (!prev) return false;
+    let sub = prev.lastElementChild;
+    if (!sub || sub.nodeName !== list.nodeName) {
+      sub = document.createElement(list.nodeName);
+      prev.appendChild(sub);
+    }
+    sub.appendChild(li);
+  } else {
+    const parentLi = list.parentElement;
+    if (!parentLi || parentLi.nodeName !== 'LI') return false;
+    // items after this one become its children, so the order of the text doesn't change
+    const after = [];
+    for (let n = li.nextElementSibling; n; n = n.nextElementSibling) after.push(n);
+    if (after.length) {
+      const sub = document.createElement(list.nodeName);
+      after.forEach((n) => sub.appendChild(n));
+      li.appendChild(sub);
+    }
+    parentLi.parentElement.insertBefore(li, parentLi.nextSibling);
+    if (!list.children.length) list.remove();
+  }
+  if (saved) {
+    sel.removeAllRanges();
+    sel.addRange(saved);
+  }
+  return true;
+}
+
+function previewTabKey(outdent) {
+  const node = selectionNode();
+  if (!node || !preview.contains(node)) return;
+  const li = node.closest('li');
+  if (li && preview.contains(li)) {
+    if (nestListItem(li, outdent)) syncFromPreview();
+    return;
+  }
+  if (!outdent) document.execCommand('insertText', false, '\t');
+}
+
+/* ---------- getting out of a code block in the preview ---------- */
+
+/** Text of a <pre> before and after the caret. */
+function preCaretSplit(pre) {
+  const code = pre.querySelector('code') || pre;
+  const sel = window.getSelection();
+  const r = document.createRange();
+  r.selectNodeContents(code);
+  const full = r.toString();
+  try {
+    r.setEnd(sel.anchorNode, sel.anchorOffset);
+  } catch (e) {
+    return { before: full, after: '' };
+  }
+  const before = r.toString();
+  return { before, after: full.slice(before.length) };
+}
+
+function paragraphBeside(block, before) {
+  const p = document.createElement('p');
+  p.appendChild(document.createElement('br'));
+  block.parentNode.insertBefore(p, before ? block : block.nextSibling);
+  placeCaret(p, 0);
+  return p;
+}
+
+/** Links that were written as plain URLs / addresses (their text is the address). */
+function markBareLinks() {
+  preview.querySelectorAll('a[href]').forEach((a) => {
+    const href = a.getAttribute('href');
+    const t = a.textContent;
+    if (t === href || 'mailto:' + t === href || 'http://' + t === href) a.setAttribute('data-bare', '');
+  });
+}
+
+/** Blocks the caret can get stuck in when nothing editable follows them. */
+function ensureTrailingParagraph() {
+  const last = preview.lastElementChild;
+  if (last && (last.nodeName === 'PRE' || last.nodeName === 'TABLE' || last.nodeName === 'BLOCKQUOTE')) {
+    const p = document.createElement('p');
+    p.appendChild(document.createElement('br'));
+    preview.appendChild(p);
+  }
+}
+
+/**
+ * Arrow Down / Right at the end of a code block (or Up / Left at its start) leaves it, adding an
+ * empty paragraph when nothing follows; Enter on an empty last line, or Ctrl+Enter, also leaves it.
+ */
+function handleCodeBlockKey(e) {
+  if (e.altKey || e.metaKey || e.shiftKey) return false;
+  const node = selectionNode();
+  const pre = node && node.closest('pre');
+  if (!pre || !preview.contains(pre)) return false;
+  const sel = window.getSelection();
+  if (!sel.isCollapsed) return false;
+  const { before, after } = preCaretSplit(pre);
+  const atEnd = after.replace(/\n$/, '') === '';
+  const onLastLine = !after.replace(/\n$/, '').includes('\n');
+  const atStart = before === '';
+  const onFirstLine = !before.includes('\n');
+  if (e.key === 'Enter' && (e.ctrlKey || (atEnd && /\n$/.test(before)))) {
+    e.preventDefault();
+    if (!e.ctrlKey) {
+      // drop the empty line the first Enter added
+      const code = pre.querySelector('code') || pre;
+      code.textContent = before.replace(/\n$/, '');
+      addCodeCopyButtons();
+    }
+    const next = pre.nextElementSibling;
+    if (next && next.nodeName === 'P' && !next.textContent.trim()) placeCaret(next, 0);
+    else paragraphBeside(pre, false);
+    syncFromPreview();
+    return true;
+  }
+  if (e.ctrlKey) return false;
+  if ((e.key === 'ArrowDown' && onLastLine) || (e.key === 'ArrowRight' && atEnd)) {
+    if (pre.nextElementSibling) return false; // the browser moves into it
+    e.preventDefault();
+    paragraphBeside(pre, false);
+    return true;
+  }
+  if ((e.key === 'ArrowUp' && onFirstLine) || (e.key === 'ArrowLeft' && atStart)) {
+    if (pre.previousElementSibling) return false;
+    e.preventDefault();
+    paragraphBeside(pre, true);
+    return true;
+  }
+  return false;
 }
 
 function highlightPreviewCodeBlocks() {
@@ -497,6 +790,7 @@ function initSpell() {
 }
 
 function updateSpellStatus() {
+  syncMenuChecks();
   statusSpell.textContent = spell.enabled ? SPELL_LANG_LABELS[spell.lang] : 'Spelling off';
   statusSpell.classList.toggle('off', !spell.enabled);
 }
@@ -614,7 +908,7 @@ const SPELL_SKIP_EDITOR = /\bhljs-(code|link|symbol|meta|tag|name)\b/;
  * (find hits, bookmarked lines, ...), wrapping each piece in spans with the matching classes.
  * Spelling spans carry data-o (word offset) and data-w (word) for the right-click menu.
  */
-function decorateOverlay(html, decoLists, wantSpell) {
+function decorateOverlay(html, decoLists, wantSpell, noSpell = []) {
   const tpl = document.createElement('template');
   tpl.innerHTML = html;
   const walker = document.createTreeWalker(tpl.content, NodeFilter.SHOW_TEXT);
@@ -646,7 +940,7 @@ function decorateOverlay(html, decoLists, wantSpell) {
       }
       if (!skip) {
         forEachWord(text, (m) => {
-          if (isMisspelled(m[0])) local.push({ s: m.index, e: m.index + m[0].length, cls: 'spell-err', o: base + m.index, w: m[0] });
+          if (isMisspelled(m[0]) && !noSpell.some((r) => base + m.index < r.e && base + m.index + m[0].length > r.s)) local.push({ s: m.index, e: m.index + m[0].length, cls: 'spell-err', o: base + m.index, w: m[0] });
         });
       }
     }
@@ -917,10 +1211,12 @@ function renderPreview(doc) {
   if (mode === 'markdown') {
     preview.setAttribute('contenteditable', 'true');
     preview.innerHTML = marked_.parse(doc.content);
+    markBareLinks();
     fixPreviewImages(doc);
     enableCheckboxes();
     highlightPreviewCodeBlocks();
     addCodeCopyButtons();
+    ensureTrailingParagraph();
   } else if (mode === 'bbcode') {
     preview.setAttribute('contenteditable', 'false');
     preview.innerHTML = renderBBCode(doc.content);
@@ -1009,6 +1305,7 @@ function togglePreviewMode() {
 }
 
 function updatePreviewModeButton() {
+  syncMenuChecks();
   const doc = getActive();
   const render = langInfo(doc).render;
   previewModeBtn.textContent = render === 'bbcode' ? 'BB' : render === 'code' ? '{ }' : 'MD';
@@ -1167,6 +1464,10 @@ function renderTabs() {
     tab.appendChild(title);
     tab.appendChild(pin);
     tab.appendChild(close);
+    title.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      startTabRename(doc, title);
+    });
     tab.addEventListener('click', () => setActiveTab(doc.id));
     tab.addEventListener('mousedown', (e) => {
       if (e.button === 1) e.preventDefault(); // stop middle-click autoscroll
@@ -1187,6 +1488,72 @@ function renderTabs() {
   updateWindowTitle();
 }
 
+
+/* ---------- rename a tab (double-click its name) ---------- */
+
+// Untitled tabs just get a new name; a saved file is renamed on disk (same folder).
+function startTabRename(doc, titleEl) {
+  if (!titleEl.isConnected) return;
+  const input = document.createElement('input');
+  input.className = 'tab-rename';
+  input.value = tabTitle(doc);
+  input.spellcheck = false;
+  titleEl.replaceWith(input);
+  input.focus();
+  const dot = input.value.lastIndexOf('.');
+  input.setSelectionRange(0, dot > 0 ? dot : input.value.length);
+  let done = false;
+  const finish = async (commit) => {
+    if (done) return;
+    done = true;
+    const name = input.value.trim();
+    if (commit && name && name !== tabTitle(doc)) await renameDoc(doc, name);
+    renderTabs();
+    if (doc.id === activeId) updateStatusBar();
+  };
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      finish(true);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      finish(false);
+    }
+  });
+  input.addEventListener('blur', () => finish(true));
+  for (const t of ['mousedown', 'click', 'dblclick', 'auxclick']) input.addEventListener(t, (e) => e.stopPropagation());
+}
+
+async function renameDoc(doc, name) {
+  if (/[\\/:*?"<>|]/.test(name) || /^\.+$/.test(name)) {
+    await dialogApi.message('A name can\'t contain any of these characters:  \\ / : * ? " < > |', { title: 'Rename', kind: 'warning' });
+    return;
+  }
+  if (!doc.path) {
+    doc.customTitle = name;
+    scheduleSessionSave();
+    return;
+  }
+  const target = dirOf(doc.path).replace(/\//g, '\\').replace(/\\?$/, '\\') + name;
+  try {
+    await invoke('cmd_rename_file', { from: doc.path, to: target });
+  } catch (e) {
+    await dialogApi.message('Could not rename "' + basename(doc.path) + '":\n' + e, { title: 'Rename', kind: 'error' });
+    return;
+  }
+  doc.path = target;
+  // A new extension can mean a new language (unless the user picked one for this tab).
+  const lang = langForPath(target);
+  if (!doc.langOverride && lang !== doc.lang) {
+    doc.lang = lang;
+    if (doc.id === activeId) {
+      saveDocView(doc);
+      loadActiveDocIntoPanes();
+    }
+  }
+  scheduleSessionSave();
+}
 
 /* ---------- drag tabs to reorder ---------- */
 
@@ -1416,6 +1783,7 @@ function buildSession() {
     docs: docs.map((d) => ({
       path: d.path,
       untitledNum: d.untitledNum || null,
+      customTitle: d.customTitle || undefined,
       lang: d.lang,
       langOverride: d.langOverride || undefined,
       pinned: d.pinned,
@@ -1521,7 +1889,7 @@ async function restoreDocs(s) {
       // Untitled tabs come back even when empty, so a restart never removes a tab.
       let num = d.untitledNum;
       if (!num || restored.some((r) => !r.path && r.untitledNum === num)) num = lowestFreeUntitledNum(restored);
-      doc = makeDoc(null, typeof d.content === 'string' ? d.content : '', { ...opts, untitledNum: num, lang: LANGS[d.lang] ? d.lang : 'markdown' });
+      doc = makeDoc(null, typeof d.content === 'string' ? d.content : '', { ...opts, untitledNum: num, customTitle: typeof d.customTitle === 'string' ? d.customTitle : null, lang: LANGS[d.lang] ? d.lang : 'markdown' });
     }
     if (doc) {
       restored.push(doc);
@@ -1643,7 +2011,7 @@ async function saveDocGeneric(doc, forcePrompt) {
   if (!path || forcePrompt) {
     path = await dialogApi.save({
       filters: saveFilters(doc),
-      defaultPath: doc.path || tabTitle(doc) + '.' + langInfo(doc).exts[0],
+      defaultPath: doc.path || (/\.[A-Za-z0-9]{1,8}$/.test(tabTitle(doc)) ? tabTitle(doc) : tabTitle(doc) + '.' + langInfo(doc).exts[0]),
     });
     if (!path) return false;
   }
@@ -1824,6 +2192,7 @@ function codeBlockPreview() {
   const text = sel && sel.toString() ? sel.toString() : 'code';
   preview.focus();
   document.execCommand('insertHTML', false, '<pre><code>' + escapeHtml(text) + '</code></pre>');
+  ensureTrailingParagraph();
   syncFromPreview();
 }
 
@@ -2119,8 +2488,48 @@ function wireDomEvents() {
   preview.addEventListener('input', syncFromPreview);
   preview.addEventListener('focus', () => (lastFocused = 'preview'));
   preview.addEventListener('keydown', (e) => {
-    if (handleTableKey(e)) e.stopPropagation();
+    if (handleTableKey(e)) {
+      e.stopPropagation();
+      return;
+    }
+    if (preview.getAttribute('contenteditable') !== 'true') return;
+    if (handleCodeBlockKey(e)) return;
+    if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      e.preventDefault();
+      previewTabKey(e.shiftKey);
+    }
   });
+  editor.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      e.preventDefault();
+      editorTabKey(e.shiftKey);
+    }
+  });
+  // Links in the editor: underlined, Ctrl+click opens them (a plain click places the caret).
+  const overUrl = (e) => {
+    if (!editor.classList.contains('hl-active')) return false;
+    return [...editorHighlight.querySelectorAll('.ov-url')].some((s) => pointInRects(e.clientX, e.clientY, s.getClientRects()));
+  };
+  editor.addEventListener('mousemove', (e) => {
+    const over = overUrl(e);
+    editor.classList.toggle('over-url', over);
+    document.body.classList.toggle('ctrl-down', e.ctrlKey);
+    editor.title = over ? 'Ctrl+click to open the link' : '';
+  });
+  editor.addEventListener('mouseleave', () => editor.classList.remove('over-url'));
+  editor.addEventListener('click', (e) => {
+    if (!e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (editor.selectionStart !== editor.selectionEnd) return;
+    const url = urlAtOffset(editor.value, editor.selectionStart);
+    if (url) {
+      e.preventDefault();
+      openUrl(url);
+    }
+  });
+  const trackCtrl = (e) => document.body.classList.toggle('ctrl-down', e.ctrlKey);
+  window.addEventListener('keydown', trackCtrl, true);
+  window.addEventListener('keyup', trackCtrl, true);
+  window.addEventListener('blur', () => document.body.classList.remove('ctrl-down'));
   preview.addEventListener('contextmenu', (e) => {
     const range = spell.previewRanges.find((r) => pointInRects(e.clientX, e.clientY, r.getClientRects()));
     if (!range) {
@@ -2375,7 +2784,59 @@ function wireDomEvents() {
   });
 }
 
+/* ---------- ticks in the View menu ---------- */
+
+let lastMenuChecks = '';
+let menuCheckTimer = 0;
+
+function currentMenuChecks() {
+  const doc = getActive();
+  const render = langInfo(doc).render;
+  return {
+    toolbar: !toolbarEl.classList.contains('hidden'),
+    sidebar: !!settings.sidebar,
+    menu_bar: !!settings.menuBar,
+    status_bar: !!settings.statusBar,
+    word_wrap: !!settings.wordWrap,
+    toggle_line_numbers: !!lineNumbersVisible,
+    layout_edit_only: layoutMode === 'edit-only',
+    layout_preview_only: layoutMode === 'preview-only',
+    layout_edit_left: layoutMode === 'split-ep',
+    layout_preview_left: layoutMode === 'split-pe',
+    preview_markdown: render === 'markdown',
+    preview_bbcode: render === 'bbcode',
+    spell_toggle: !!spell.enabled,
+    spell_en_gb: spell.enabled && spell.lang === 'en_GB',
+    spell_en_us: spell.enabled && spell.lang === 'en_US',
+    toggle_theme: document.documentElement.getAttribute('data-theme') === 'dark',
+  };
+}
+
+/** Sends the ticks to the native menu when they changed (force: a click may have flipped one). */
+function syncMenuChecks(force) {
+  if (force) lastMenuChecks = '';
+  clearTimeout(menuCheckTimer);
+  menuCheckTimer = setTimeout(() => {
+    let checks;
+    try {
+      checks = currentMenuChecks();
+    } catch (e) {
+      return; // still starting up
+    }
+    const key = JSON.stringify(checks);
+    if (key === lastMenuChecks) return;
+    lastMenuChecks = key;
+    invoke('cmd_set_menu_checks', { checks }).catch((e) => console.error('menu ticks', e));
+  }, 30);
+}
+
 function wireMenuListeners() {
+  // Clicking a ticked menu item flips its tick natively; re-send the real state afterwards.
+  const listen = (name, fn) =>
+    window.__TAURI__.event.listen(name, (e) => {
+      fn(e);
+      if (name.startsWith('menu-')) syncMenuChecks(true);
+    });
   listen('menu-new', () => addDocAndActivate(newUntitledDoc()));
   // Another launch (double-clicked file, "Open with") handed its files to this window.
   listen('open-files', async (e) => {

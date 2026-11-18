@@ -180,6 +180,7 @@
           <label class="check"><input type="checkbox" data-s="toolbar" /> Show toolbar <kbd>Ctrl+T</kbd></label>
           <label class="check"><input type="checkbox" data-s="sidebar" /> Show sidebar <kbd>Ctrl+Shift+E</kbd></label>
           <label class="check"><input type="checkbox" data-s="statusBar" /> Show status bar</label>
+          <label class="row">Tab header font size <span><input type="number" data-s="tabFontSize" min="9" max="20" step="0.5" /> px</span></label>
         </section>
         <section>
           <h3>Editor</h3>
@@ -210,8 +211,8 @@
           <div class="row"><span>Register file types</span><span class="btns"><button id="ft-register" title="Add Notepad MD to the &quot;Open with&quot; list of every supported file type (just for your Windows account)">Register</button><button id="ft-unregister" title="Remove Notepad MD from &quot;Open with&quot;">Unregister</button></span></div>
           <p class="note" id="ft-status">Checking...</p>
           <p class="note" id="ft-exts"></p>
-          <label class="check"><input type="checkbox" id="ctx-menu" /> Show <b>Edit in Notepad-MD</b> when you right-click a file in Explorer</label>
-          <p class="note" id="ctx-status">On Windows 11 it's under <em>Show more options</em> (or Shift+right-click).</p>
+          <label class="check"><input type="checkbox" id="explorer-menu" /> Show <b>Edit in Notepad-MD</b> when you right-click a file in Explorer</label>
+          <p class="note" id="explorer-menu-status">On Windows 11 it's under <em>Show more options</em> (or Shift+right-click).</p>
           <div class="row"><span>Make Notepad MD the default app</span><button id="ft-defaults" title="Opens Windows Settings &gt; Default apps">Open Windows Default Apps</button></div>
           <p class="note">Windows only lets <em>you</em> choose default apps: after registering, pick Notepad MD there (or right-click a file &gt; Open with &gt; Choose another app &gt; Notepad MD &gt; Always).</p>
         </section>
@@ -238,7 +239,7 @@
       </div>
       <div class="about-body">
         <img src="app-icon.png" alt="" width="64" height="64" />
-        <div class="about-name">NotePad-MD <span id="about-version">v1.0.2</span></div>
+        <div class="about-name">NotePad-MD <span id="about-version">v1.0.3</span></div>
         <a href="https://github.com/mccabedd/notepad-md" id="about-link">https://github.com/mccabedd/notepad-md</a>
         <div>Created by David McCabe</div>
         <button id="about-update" class="primary">Check for Updates</button>

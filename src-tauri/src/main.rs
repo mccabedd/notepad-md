@@ -9,11 +9,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
+use std::collections::HashMap;
 use tauri::{Emitter, Manager, State, WindowEvent};
 
 /// Files larger than this are refused (the editor is not built for huge files).
 const MAX_FILE_BYTES: u64 = 20 * 1024 * 1024;
+
+/// View-menu items that show a tick; the page tells us when their state changes.
+struct MenuChecks(Mutex<HashMap<String, CheckMenuItem<tauri::Wry>>>);
 
 struct AppState {
     initial_files: Mutex<Vec<PathBuf>>,
@@ -146,6 +150,37 @@ fn cmd_set_menu_visible(window: tauri::Window, visible: bool) -> Result<(), Stri
     r.map_err(|e| e.to_string())
 }
 
+/// Sets the ticks in the View menu (async so it doesn't run on, and wait for, the main thread).
+#[tauri::command]
+async fn cmd_set_menu_checks(state: State<'_, MenuChecks>, checks: HashMap<String, bool>) -> Result<(), String> {
+    let items: Vec<(CheckMenuItem<tauri::Wry>, bool)> = {
+        let map = state.0.lock().map_err(|e| e.to_string())?;
+        checks.iter().filter_map(|(id, on)| map.get(id).map(|i| (i.clone(), *on))).collect()
+    };
+    for (item, on) in items {
+        item.set_checked(on).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Renames a file in place (double-clicking a tab's name). Refuses to overwrite another file.
+#[tauri::command]
+fn cmd_rename_file(from: String, to: String) -> Result<(), String> {
+    let src = PathBuf::from(&from);
+    let dst = PathBuf::from(&to);
+    if !src.is_file() {
+        return Err("The file no longer exists.".into());
+    }
+    if src.parent() != dst.parent() {
+        return Err("Only the name can change, not the folder.".into());
+    }
+    // A change of case only ("notes.md" -> "Notes.md") is the same file on Windows.
+    if dst.exists() && !from.eq_ignore_ascii_case(&to) {
+        return Err(format!("A file named \"{}\" already exists there.", dst.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
+    }
+    fs::rename(&src, &dst).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn cmd_delete_file(path: String) -> Result<(), String> {
     fs::remove_file(&path).map_err(|e| e.to_string())
@@ -216,6 +251,8 @@ fn main() {
             cmd_close_ack,
             cmd_close_cancelled,
             cmd_set_menu_visible,
+            cmd_set_menu_checks,
+            cmd_rename_file,
             system::cmd_app_info,
             system::cmd_register_file_types,
             system::cmd_unregister_file_types,
@@ -271,15 +308,24 @@ fn main() {
                 ],
             )?;
 
+            // Items with a tick. The page keeps the ticks in step with its state
+            // (cmd_set_menu_checks), whichever way a setting was changed.
+            let mut checks: HashMap<String, CheckMenuItem<tauri::Wry>> = HashMap::new();
+            let mut check = |id: &str, text: &str, accel: Option<&str>| -> tauri::Result<CheckMenuItem<tauri::Wry>> {
+                let item = CheckMenuItem::with_id(app, id, text, true, false, accel)?;
+                checks.insert(id.to_string(), item.clone());
+                Ok(item)
+            };
+
             let spelling_submenu = Submenu::with_items(
                 app,
                 "Spelling",
                 true,
                 &[
-                    &MenuItem::with_id(app, "spell_toggle", "Spell Check On/Off", true, Some("F7"))?,
+                    &check("spell_toggle", "Spell Check", Some("F7"))?,
                     &PredefinedMenuItem::separator(app)?,
-                    &MenuItem::with_id(app, "spell_en_gb", "English (UK)", true, None::<&str>)?,
-                    &MenuItem::with_id(app, "spell_en_us", "English (US)", true, None::<&str>)?,
+                    &check("spell_en_gb", "English (UK)", None)?,
+                    &check("spell_en_us", "English (US)", None)?,
                 ],
             )?;
 
@@ -317,42 +363,24 @@ fn main() {
                 "View",
                 true,
                 &[
-                    &MenuItem::with_id(app, "toolbar", "Toolbar", true, Some("CmdOrCtrl+T"))?,
-                    &MenuItem::with_id(app, "sidebar", "Sidebar", true, Some("CmdOrCtrl+Shift+E"))?,
+                    &check("toolbar", "Toolbar", Some("CmdOrCtrl+T"))?,
+                    &check("sidebar", "Sidebar", Some("CmdOrCtrl+Shift+E"))?,
                     // "Alt" alone is not a valid accelerator, so the hint is part of the title.
-                    &MenuItem::with_id(app, "menu_bar", "Menu Bar\tAlt", true, None::<&str>)?,
-                    &MenuItem::with_id(app, "status_bar", "Status Bar", true, None::<&str>)?,
-                    &MenuItem::with_id(app, "word_wrap", "Word Wrap", true, Some("Alt+Z"))?,
+                    &check("menu_bar", "Menu Bar\tAlt", None)?,
+                    &check("status_bar", "Status Bar", None)?,
+                    &check("word_wrap", "Word Wrap", Some("Alt+Z"))?,
+                    &check("toggle_line_numbers", "Line Numbers", Some("CmdOrCtrl+Shift+L"))?,
                     &PredefinedMenuItem::separator(app)?,
                     // Order (and Ctrl+Alt+1..4): Edit, Preview, Edit/Preview, Preview/Edit.
-                    &MenuItem::with_id(app, "layout_edit_only", "Edit Only", true, Some("CmdOrCtrl+Alt+1"))?,
-                    &MenuItem::with_id(app, "layout_preview_only", "Preview Only", true, Some("CmdOrCtrl+Alt+2"))?,
-                    &MenuItem::with_id(
-                        app,
-                        "layout_edit_left",
-                        "Edit Left / Preview Right",
-                        true,
-                        Some("CmdOrCtrl+Alt+3"),
-                    )?,
-                    &MenuItem::with_id(
-                        app,
-                        "layout_preview_left",
-                        "Preview Left / Edit Right",
-                        true,
-                        Some("CmdOrCtrl+Alt+4"),
-                    )?,
+                    &check("layout_edit_only", "Edit Only", Some("CmdOrCtrl+Alt+1"))?,
+                    &check("layout_preview_only", "Preview Only", Some("CmdOrCtrl+Alt+2"))?,
+                    &check("layout_edit_left", "Edit Left / Preview Right", Some("CmdOrCtrl+Alt+3"))?,
+                    &check("layout_preview_left", "Preview Left / Edit Right", Some("CmdOrCtrl+Alt+4"))?,
                     &PredefinedMenuItem::separator(app)?,
-                    &MenuItem::with_id(app, "preview_markdown", "Preview as Markdown", true, Some("CmdOrCtrl+Alt+M"))?,
-                    &MenuItem::with_id(app, "preview_bbcode", "Preview as BBCode", true, Some("CmdOrCtrl+Alt+B"))?,
+                    &check("preview_markdown", "Preview as Markdown", Some("CmdOrCtrl+Alt+M"))?,
+                    &check("preview_bbcode", "Preview as BBCode", Some("CmdOrCtrl+Alt+B"))?,
                     &MenuItem::with_id(app, "language_menu", "Language...", true, None::<&str>)?,
                     &PredefinedMenuItem::separator(app)?,
-                    &MenuItem::with_id(
-                        app,
-                        "toggle_line_numbers",
-                        "Toggle Line Numbers",
-                        true,
-                        Some("CmdOrCtrl+Shift+L"),
-                    )?,
                     &spelling_submenu,
                     &PredefinedMenuItem::separator(app)?,
                     &MenuItem::with_id(
@@ -371,13 +399,7 @@ fn main() {
                     )?,
                     &MenuItem::with_id(app, "font_reset", "Reset Font Size", true, Some("CmdOrCtrl+0"))?,
                     &PredefinedMenuItem::separator(app)?,
-                    &MenuItem::with_id(
-                        app,
-                        "toggle_theme",
-                        "Toggle Dark/Light Theme",
-                        true,
-                        Some("CmdOrCtrl+Shift+D"),
-                    )?,
+                    &check("toggle_theme", "Dark Theme", Some("CmdOrCtrl+Shift+D"))?,
                 ],
             )?;
 
@@ -388,7 +410,9 @@ fn main() {
                 &[&MenuItem::with_id(app, "about", "About Notepad MD...", true, None::<&str>)?],
             )?;
 
-            let menu = Menu::with_items(app, &[&file_submenu, &edit_submenu, &search_submenu, &view_submenu, &about_submenu])?;
+            app.manage(MenuChecks(Mutex::new(checks)));
+            // File > Edit > View > Search > About
+            let menu = Menu::with_items(app, &[&file_submenu, &edit_submenu, &view_submenu, &search_submenu, &about_submenu])?;
             app.set_menu(menu)?;
 
             // The window starts hidden so the page can restore its saved size/position first and then

@@ -12,6 +12,7 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 - **Remembered state** — window size/position, theme, toolbar, menu bar, sidebar, status bar, line numbers, word wrap, spelling, the find bar / Advanced pane (filters, options, height) and all Settings survive a restart. Everything is kept in `%APPDATA%\com.notepadmd.app\session.json`, including the text of unsaved tabs (there are no separate temp files). `instance.json` next to it lets a second launch find the running window.
 - **Tabs** — always shown. Unsaved tabs show a `*` before the name; the active tab has a red bar along its top. `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle, `Ctrl+W` or middle-click closes, double-click the empty tab bar for a new document. When there are many tabs, the mouse wheel steps through them exactly like the ‹ › buttons.
 - **Drag tabs** to rearrange them (pinned tabs stay together at the left). The order is remembered.
+- **Rename a tab** by double-clicking its name: an untitled tab just gets the new name; a saved file is renamed on disk (in the same folder; it won't overwrite another file).
 - **One window** — opening a file while Notepad MD is already running (double-click, *Open with*, command line) opens it as a tab in the running window instead of starting a second copy.
 - New documents are numbered like Notepad++: a new tab takes the lowest free number (*Untitled*, *Untitled 2*, …). Empty untitled tabs are kept across restarts too.
 - **Tab right-click menu** — Save, Save As, Pin/Unpin, Close, Close Others / Close All (both keep pinned tabs), Copy Full Path.
@@ -25,10 +26,16 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 - **Word wrap** on/off (`Alt+Z`, View menu).
 - Show/hide the **menu bar** (tap `Alt`), **sidebar** (`Ctrl+Shift+E`), **toolbar** (`Ctrl+T`) and **status bar** (View menu).
 - Light / dark theme (`Ctrl+Shift+D`) or follow Windows.
+- The **View** menu shows a tick next to whatever is on (toolbar, word wrap, line numbers, current layout, preview mode, spelling, dark theme). Menus: File, Edit, View, Search, About.
 - Line numbers (`Ctrl+Shift+L`); bookmarked lines are shown in their bookmark colour.
 
 ### Editing
 - Edit directly in the rendered Markdown preview — changes sync back to the Markdown source, and vice versa.
+- Every new line in the source is a new line in the preview (like Obsidian), so a list of links or log lines isn't run together. Plain links stay plain links when the preview is edited.
+- **Tab key** inserts a tab in the editor; with several lines selected, `Tab` / `Shift+Tab` indent / outdent them. In a preview list, `Tab` / `Shift+Tab` nest / un-nest the item. Lists are written as `- item` (no growing indents).
+- **Indent guides** — faint vertical lines at each indent step in the editor (like Notepad++).
+- **Links in the editor** are underlined; `Ctrl`+click opens them in your browser.
+- **Code blocks in the preview** — `Arrow Down` at the end, or `Enter` on an empty last line, takes you out of the block (there is always a line below it to click into).
 - **Tables in the preview** (Obsidian-style) — right-click a cell: add row above/below, add column left/right, move row up/down, move column left/right, align column (left/center/right), delete row/column/table. `Tab` / `Shift+Tab` move between cells (Tab in the last cell adds a row), `Enter` moves down.
 - **Syntax colouring** for XML, HTML, CSS, YAML, JSON, INI, TOML, Python, JavaScript, Java, C, C#, C++, PowerShell (`.ps1`), MS-DOS batch (`.bat` / `.cmd`), PHP, Markdown and **BBCode** (`.bbcode` / `.bb`). Code files show a read-only coloured view in the preview pane; BBCode shows a formatted, read-only preview (bold/italic/underline, links, images, quotes, lists, colours, sizes, code, tables, spoilers).
 - **Spell checking** in English (UK) or English (US) in the editor and preview; right-click a red-underlined word for suggestions, *Add to dictionary* or *Ignore*. `F7` toggles it; click the language in the status bar to switch.
@@ -49,7 +56,7 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 - **Bookmarks in the editor** — `Ctrl+F2` toggle, `F2` / `Shift+F2` next / previous. Bookmarks follow their text when lines are inserted or deleted above them, and are saved with the session.
 
 ### Settings (`Ctrl+,` or File > Settings)
-Theme; reopen tabs on start; menu bar / toolbar / sidebar / status bar; line numbers; word wrap; tab width; editor font, style (regular/bold/italic), text colour and background; preview font, style, text colour and background ("Use theme" returns a colour to the light/dark theme); default view and font size for new tabs; spell checking and language; Reset to defaults.
+Theme; reopen tabs on start; menu bar / toolbar / sidebar / status bar; tab header font size; line numbers; word wrap; tab width; editor font, style (regular/bold/italic), text colour and background; preview font, style, text colour and background ("Use theme" returns a colour to the light/dark theme); default view and font size for new tabs; spell checking and language; Reset to defaults.
 
 - **Import / Export** — save all settings (plus your spelling dictionary) to a `.json` file and load them on another PC. Importing merges the dictionary.
 - **Edit in Notepad-MD** — a checkbox adds *Edit in Notepad-MD* (with the app's icon) to Explorer's right-click menu for every file (per user, no admin needed). On Windows 11 it's under *Show more options* / Shift+right-click, because the new compact menu only lists packaged (Store/MSIX) apps.

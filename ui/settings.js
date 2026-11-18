@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS = {
   statusBar: true,
   wordWrap: true,
   tabSize: 4,
+  tabFontSize: 12.5, // tab header text, px
   newTabView: 'preview-only', // or 'same' = same view as the tab you are on
   newTabFontSize: 14,
   editFont: 'Consolas',
@@ -43,6 +44,11 @@ function loadSettings(saved) {
   }
   settings.newTabFontSize = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(settings.newTabFontSize)));
   if (![2, 4, 8].includes(settings.tabSize)) settings.tabSize = 4;
+  settings.tabFontSize = clampTabFont(settings.tabFontSize);
+}
+
+function clampTabFont(v) {
+  return Number.isFinite(v) ? Math.min(20, Math.max(9, Math.round(v * 2) / 2)) : 12.5;
 }
 
 function fontStack(name, mono) {
@@ -61,6 +67,7 @@ const COLOR_RE = /^#[0-9a-f]{6}$/i;
 
 /** Applies every setting to the page (cheap; safe to call after any change). */
 function applySettings() {
+  if (typeof syncMenuChecks === "function") syncMenuChecks();
   const [ew, es] = FONT_STYLES[settings.editStyle] || FONT_STYLES.normal;
   const [pw, ps] = FONT_STYLES[settings.previewStyle] || FONT_STYLES.normal;
   setVar('--edit-font-family', fontStack(settings.editFont, true));
@@ -74,6 +81,7 @@ function applySettings() {
   setVar('--preview-fg', COLOR_RE.test(settings.previewColor) ? settings.previewColor : '');
   setVar('--preview-bg', COLOR_RE.test(settings.previewBg) ? settings.previewBg : '');
   setVar('--tab-size', String(settings.tabSize));
+  setVar('--tab-font-size', settings.tabFontSize + 'px');
 
   document.body.classList.toggle('nowrap', !settings.wordWrap);
   editor.setAttribute('wrap', settings.wordWrap ? 'soft' : 'off');
@@ -383,8 +391,8 @@ async function refreshFileTypeStatus() {
 
 /* ---------- Explorer right-click "Edit in Notepad-MD" ---------- */
 
-const ctxMenuBox = document.getElementById('ctx-menu');
-const ctxStatus = document.getElementById('ctx-status');
+const ctxMenuBox = document.getElementById('explorer-menu');
+const ctxStatus = document.getElementById('explorer-menu-status');
 const CTX_HINT = 'On Windows 11 it\'s under "Show more options" (or Shift+right-click).';
 
 async function refreshContextMenuStatus() {
@@ -472,6 +480,7 @@ function onSettingInput(e) {
   else if (el.type === 'number') {
     v = parseInt(el.value, 10);
     if (isNaN(v)) return;
+    if (key === 'tabFontSize') v = clampTabFont(parseFloat(el.value));
     if (key === 'newTabFontSize') v = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, v));
   } else if (key === 'tabSize') v = parseInt(el.value, 10);
   else v = el.value;
