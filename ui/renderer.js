@@ -515,7 +515,7 @@ function urlRanges(text) {
   let m;
   while ((m = URL_RE.exec(text)) && out.length < 5000) {
     const url = trimUrl(m[0]);
-    out.push({ s: m.index, e: m.index + url.length, cls: 'ov-url' });
+    out.push({ s: m.index, e: m.index + url.length, cls: 'ov-url', url });
   }
   return out;
 }
@@ -558,6 +558,36 @@ function urlAtOffset(text, pos) {
 
 function openUrl(url) {
   invoke('cmd_open_url', { url }).catch((e) => flashFindStatus('Could not open the link: ' + e));
+}
+
+/** Right-click on a link in the editor (the same choices as on a link in the preview). */
+function showLinkMenu(x, y, url) {
+  showContextMenu(x, y, [
+    { label: 'Open Link in New Window', icon: '↗', gesture: 'Double-click', action: () => openUrl(url) },
+    { label: 'Save Link As...', icon: '\u{1F5AB}', action: () => saveLinkAs(url) },
+    { label: 'Copy Link', icon: '⧉', action: () => clipboard.writeText(url).then(() => flashFindStatus('Link copied')) },
+  ]);
+}
+
+async function saveLinkAs(url) {
+  let name = 'download';
+  try {
+    const u = new URL(url);
+    name = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || u.hostname) || name;
+  } catch (e) {
+    /* keep the default */
+  }
+  name = name.replace(/[\\/:*?"<>|]/g, '_');
+  if (!/\.[A-Za-z0-9]{1,8}$/.test(name)) name += '.html';
+  const path = await dialogApi.save({ defaultPath: name, filters: [{ name: 'All Files', extensions: ['*'] }] });
+  if (!path) return;
+  flashFindStatus('Downloading ' + basename(path) + '...');
+  try {
+    const bytes = await invoke('cmd_download_url', { url, path });
+    flashFindStatus('Saved ' + basename(path) + ' (' + (bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB') + ')');
+  } catch (e) {
+    await dialogApi.message('Could not save the link:\n' + e, { title: 'Save Link As', kind: 'error' });
+  }
 }
 
 /* ---------- Tab key ---------- */
@@ -927,7 +957,7 @@ function decorateOverlay(html, decoLists, wantSpell, noSpell = []) {
       while (ptr[li] < list.length && list[ptr[li]].e <= base) ptr[li]++;
       for (let k = ptr[li]; k < list.length && list[k].s < end; k++) {
         const d = list[k];
-        local.push({ s: Math.max(d.s, base) - base, e: Math.min(d.e, end) - base, cls: d.cls });
+        local.push({ s: Math.max(d.s, base) - base, e: Math.min(d.e, end) - base, cls: d.cls, url: d.url });
       }
     });
     if (wantSpell) {
@@ -964,6 +994,8 @@ function decorateOverlay(html, decoLists, wantSpell, noSpell = []) {
       }
       const span = document.createElement('span');
       span.className = covering.map((d) => d.cls).join(' ');
+      const link = covering.find((d) => d.url);
+      if (link) span.dataset.url = link.url;
       const sp = covering.find((d) => d.w);
       if (sp) {
         span.dataset.o = String(sp.o);
@@ -2473,6 +2505,12 @@ function wireDomEvents() {
   });
   editor.addEventListener('contextmenu', (e) => {
     if (!editor.classList.contains('hl-active')) return;
+    const linkSpan = [...editorHighlight.querySelectorAll('.ov-url')].find((s) => pointInRects(e.clientX, e.clientY, s.getClientRects()));
+    if (linkSpan && linkSpan.dataset.url) {
+      e.preventDefault();
+      showLinkMenu(e.clientX, e.clientY, linkSpan.dataset.url);
+      return;
+    }
     const span = [...editorHighlight.querySelectorAll('.spell-err')].find((s) =>
       pointInRects(e.clientX, e.clientY, s.getClientRects())
     );
@@ -2514,9 +2552,18 @@ function wireDomEvents() {
     const over = overUrl(e);
     editor.classList.toggle('over-url', over);
     document.body.classList.toggle('ctrl-down', e.ctrlKey);
-    editor.title = over ? 'Ctrl+click to open the link' : '';
+    editor.title = over ? 'Double-click (or Ctrl+click) to open the link; right-click for more' : '';
   });
   editor.addEventListener('mouseleave', () => editor.classList.remove('over-url'));
+  // Double-click a link to open it (the browser's word selection is undone first).
+  editor.addEventListener('dblclick', (e) => {
+    if (e.ctrlKey || e.shiftKey || e.altKey || !overUrl(e)) return;
+    const url = urlAtOffset(editor.value, editor.selectionStart);
+    if (!url) return;
+    e.preventDefault();
+    editor.setSelectionRange(editor.selectionStart, editor.selectionStart);
+    openUrl(url);
+  });
   editor.addEventListener('click', (e) => {
     if (!e.ctrlKey || e.shiftKey || e.altKey) return;
     if (editor.selectionStart !== editor.selectionEnd) return;

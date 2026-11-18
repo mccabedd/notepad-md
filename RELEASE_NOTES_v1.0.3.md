@@ -25,7 +25,7 @@ If you have an earlier version, open **About → About Notepad MD → Check for 
 
 ### New
 - **Rename a tab** by double-clicking its name. An untitled tab simply gets the new name; a saved file is renamed on disk.
-- **Links in the editor** are underlined; `Ctrl`+click opens them in your browser.
+- **Links in the editor** are underlined. Double-click (or `Ctrl`+click) opens them in your browser; right-click a link for **Open Link in New Window**, **Save Link As** and **Copy Link**. Words inside links are no longer spell-checked.
 - **Indent guides** in the editor, like Notepad++.
 - **Tab header font size** in Settings → General.
 - **Ticks in the View menu** show what's on (word wrap, toolbar, line numbers, layout, preview mode, spelling, dark theme).
@@ -35,4 +35,4 @@ If you have an earlier version, open **About → About Notepad MD → Check for 
 ### Download
 **[NotepadMD-v1.0.3-win-x64.exe](https://github.com/mccabedd/notepad-md/releases/download/v1.0.3/NotepadMD-v1.0.3-win-x64.exe)** is portable, so just download it and run it. It needs Windows 10 or 11 (64-bit).
 
-- **SHA-256:** `6266407247ED17FEC1C984913D0AC2847243D2C617BD3B1B577F7AB21B709BFE`
+- **SHA-256:** `497ED82D9FA0ED017418D147B73479497DC2A139B6FBEA2F1EBC3977475550EC`

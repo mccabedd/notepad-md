@@ -219,6 +219,28 @@ fn curl(args: &[&str]) -> Result<Vec<u8>, String> {
     Ok(out.stdout)
 }
 
+/// "Save Link As" for a link in the editor: downloads http(s) `url` to `path` (chosen by the user).
+#[tauri::command]
+pub async fn cmd_download_url(url: String, path: String) -> Result<u64, String> {
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err("Only http/https links can be saved.".into());
+    }
+    let tmp = format!("{}.part", path);
+    let out = err(Command::new("curl.exe")
+        .args(["-sSL", "--fail", "--max-time", "600", "-H", USER_AGENT, "-o", &tmp, &url])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output())
+    .map_err(|e| format!("Could not run curl.exe: {}", e))?;
+    if !out.status.success() {
+        let _ = std::fs::remove_file(&tmp);
+        let msg = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(if msg.is_empty() { format!("Download failed (curl exit {:?}).", out.status.code()) } else { msg });
+    }
+    let _ = std::fs::remove_file(&path);
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
+    std::fs::metadata(&path).map(|m| m.len()).map_err(|e| e.to_string())
+}
+
 /// SHA-256 via Windows' built-in certutil (avoids adding a hashing library).
 fn sha256_file(path: &str) -> Result<String, String> {
     let out = err(Command::new("certutil.exe").args(["-hashfile", path, "SHA256"]).creation_flags(CREATE_NO_WINDOW).output())?;

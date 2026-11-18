@@ -34,7 +34,7 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 - Every new line in the source is a new line in the preview (like Obsidian), so a list of links or log lines isn't run together. Plain links stay plain links when the preview is edited.
 - **Tab key** inserts a tab in the editor; with several lines selected, `Tab` / `Shift+Tab` indent / outdent them. In a preview list, `Tab` / `Shift+Tab` nest / un-nest the item. Lists are written as `- item` (no growing indents).
 - **Indent guides** — faint vertical lines at each indent step in the editor (like Notepad++).
-- **Links in the editor** are underlined; `Ctrl`+click opens them in your browser.
+- **Links in the editor** are underlined; double-click (or `Ctrl`+click) opens them in your browser. Right-click a link for Open Link in New Window, Save Link As and Copy Link.
 - **Code blocks in the preview** — `Arrow Down` at the end, or `Enter` on an empty last line, takes you out of the block (there is always a line below it to click into).
 - **Tables in the preview** (Obsidian-style) — right-click a cell: add row above/below, add column left/right, move row up/down, move column left/right, align column (left/center/right), delete row/column/table. `Tab` / `Shift+Tab` move between cells (Tab in the last cell adds a row), `Enter` moves down.
 - **Syntax colouring** for XML, HTML, CSS, YAML, JSON, INI, TOML, Python, JavaScript, Java, C, C#, C++, PowerShell (`.ps1`), MS-DOS batch (`.bat` / `.cmd`), PHP, Markdown and **BBCode** (`.bbcode` / `.bb`). Code files show a read-only coloured view in the preview pane; BBCode shows a formatted, read-only preview (bold/italic/underline, links, images, quotes, lists, colours, sizes, code, tables, spoilers).
