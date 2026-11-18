@@ -448,6 +448,36 @@ fn main() {
                 ],
             )?;
 
+            // View > Language: every language a tab can be shown as (ids match LANGS in ui/renderer.js).
+            const LANGUAGES: [(&str, &str); 20] = [
+                ("markdown", "Markdown"),
+                ("plaintext", "Plain Text"),
+                ("bbcode", "BBCode"),
+                ("log", "Log File"),
+                ("html", "HTML"),
+                ("xml", "XML"),
+                ("css", "CSS"),
+                ("javascript", "JavaScript"),
+                ("json", "JSON"),
+                ("yaml", "YAML"),
+                ("ini", "INI"),
+                ("toml", "TOML"),
+                ("python", "Python"),
+                ("powershell", "PowerShell"),
+                ("dos", "MS-DOS Batch"),
+                ("php", "PHP"),
+                ("java", "Java"),
+                ("c", "C"),
+                ("cpp", "C++"),
+                ("csharp", "C#"),
+            ];
+            let language_submenu = Submenu::with_id(app, "language_submenu", "Language", true)?;
+            language_submenu.append(&check("lang_auto", "Auto-detect from File Extension", None)?)?;
+            language_submenu.append(&PredefinedMenuItem::separator(app)?)?;
+            for (id, label) in LANGUAGES {
+                language_submenu.append(&check(&format!("lang_{id}"), label, None)?)?;
+            }
+
             let view_submenu = Submenu::with_items(
                 app,
                 "View",
@@ -471,7 +501,7 @@ fn main() {
                     &PredefinedMenuItem::separator(app)?,
                     &check("preview_markdown", "Preview as Markdown", Some("CmdOrCtrl+Alt+M"))?,
                     &check("preview_bbcode", "Preview as BBCode", Some("CmdOrCtrl+Alt+B"))?,
-                    &MenuItem::with_id(app, "language_menu", "Language...", true, None::<&str>)?,
+                    &language_submenu,
                     &PredefinedMenuItem::separator(app)?,
                     &spelling_submenu,
                     &PredefinedMenuItem::separator(app)?,

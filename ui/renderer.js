@@ -55,6 +55,7 @@ const LANGS = {
   markdown: { label: 'Markdown', hljs: 'markdown', prose: true, render: 'markdown', exts: ['md', 'markdown'] },
   plaintext: { label: 'Plain Text', hljs: null, prose: true, render: 'markdown', exts: ['txt'] },
   bbcode: { label: 'BBCode', hljs: 'bbcode', prose: true, render: 'bbcode', exts: ['bbcode', 'bb'] },
+  log: { label: 'Log File', hljs: 'logfile', render: 'code', exts: ['txt', 'log'] }, // colours levels, times, ids
   xml: { label: 'XML', hljs: 'xml', render: 'code', exts: ['xml'] },
   html: { label: 'HTML', hljs: 'xml', render: 'code', exts: ['html', 'htm'] },
   yaml: { label: 'YAML', hljs: 'yaml', render: 'code', exts: ['yml', 'yaml'] },
@@ -97,6 +98,8 @@ const EXT_LANG = {
 
 function langForPath(p) {
   if (!p) return 'markdown';
+  // A file named exactly log.txt (any case) is a log; every other .txt stays plain text.
+  if (/(^|[\\/])log\.txt$/i.test(p)) return 'log';
   const m = /\.([^.\\/]+)$/.exec(p);
   return (m && EXT_LANG[m[1].toLowerCase()]) || 'plaintext';
 }
@@ -1322,6 +1325,8 @@ function setDocLanguage(lang) {
   if (!lang || !LANGS[lang]) lang = auto;
   doc.lang = lang;
   doc.langOverride = !!doc.path && lang !== auto;
+  // Code is edited in the editor (its preview is read-only), so don't leave the editor hidden.
+  if (LANGS[lang].render === 'code' && doc.layoutMode === 'preview-only') doc.layoutMode = 'edit-only';
   saveDocView(doc);
   loadActiveDocIntoPanes();
   scheduleFindRefresh(false);
@@ -2925,6 +2930,8 @@ function currentMenuChecks() {
     toggle_theme: document.documentElement.getAttribute('data-theme') === 'dark',
     outline: !!settings.outline,
     follow_file: !!(doc && doc.follow),
+    lang_auto: !!doc && !doc.langOverride && doc.lang === langForPath(doc.path),
+    ...Object.fromEntries(Object.keys(LANGS).map((k) => ['lang_' + k, !!doc && doc.lang === k])),
   };
 }
 
@@ -2983,6 +2990,9 @@ function wireMenuListeners() {
   listen('menu-follow-file', () => toggleFollow());
   listen('menu-recent-clear', () => clearRecent());
   for (let i = 0; i < 10; i++) listen('menu-recent-' + i, () => openRecent(i));
+  // View > Language > ...
+  listen('menu-lang-auto', () => setDocLanguage(null));
+  for (const k of Object.keys(LANGS)) listen('menu-lang-' + k, () => setDocLanguage(k));
   listen('menu-close-tab', () => closeTab(activeId));
   listen('menu-delete-file', () => deleteActiveFile());
   listen('menu-toolbar', () => toggleToolbar());
@@ -3023,6 +3033,7 @@ function wireMenuListeners() {
 
 async function init() {
   setupMarkdownEngine();
+  registerLogLanguage();
   const session = await loadSessionFile();
   applyUi(session && session.ui);
   wireDomEvents();

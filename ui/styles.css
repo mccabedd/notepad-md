@@ -1799,3 +1799,30 @@ body.ctrl-down .editor.over-url {
     margin: 16mm 14mm;
   }
 }
+
+/* ---------- v1.0.6: log file colours (no bold: the editor's coloured layer must keep exact widths) ---------- */
+:root {
+  --log-error: #c42b1c;
+  --log-warn: #a35a00;
+  --log-info: #0a66cc;
+  --log-debug: #7a7a7a;
+  --log-ok: #2b7a0b;
+  --log-time: #6f42c1;
+  --log-path: #116329;
+}
+:root[data-theme='dark'] {
+  --log-error: #ff6b6b;
+  --log-warn: #f0b04a;
+  --log-info: #5aa9ff;
+  --log-debug: #8d8d8d;
+  --log-ok: #6cc070;
+  --log-time: #c39bff;
+  --log-path: #7fc8a9;
+}
+.hljs-logerror { color: var(--log-error); }
+.hljs-logwarn { color: var(--log-warn); }
+.hljs-loginfo { color: var(--log-info); }
+.hljs-logdebug { color: var(--log-debug); }
+.hljs-logok { color: var(--log-ok); }
+.hljs-logtime { color: var(--log-time); }
+.hljs-logpath { color: var(--log-path); }

@@ -484,6 +484,8 @@ body.np-doc { max-width: 880px; margin: 32px auto; padding: 0 24px; }
 .np-doc .hljs-attr, .np-doc .hljs-attribute, .np-doc .hljs-built_in, .np-doc .hljs-symbol { color: #953800; }
 .np-doc .hljs-tag, .np-doc .hljs-meta { color: #116329; }
 .np-doc .hljs-deletion { color: #82071e; }
+.np-doc .hljs-logerror { color: #c42b1c; } .np-doc .hljs-logwarn { color: #a35a00; } .np-doc .hljs-loginfo { color: #0a66cc; }
+.np-doc .hljs-logdebug { color: #7a7a7a; } .np-doc .hljs-logok { color: #2b7a0b; } .np-doc .hljs-logtime { color: #6f42c1; } .np-doc .hljs-logpath { color: #116329; }
 .np-doc .hljs-emphasis { font-style: italic; } .np-doc .hljs-strong { font-weight: bold; }
 .np-doc .bb-spoiler, .np-doc details { border: 1px solid #d0d7de; border-radius: 6px; padding: 6px 10px; margin-bottom: 0.9em; }
 `;
@@ -903,6 +905,44 @@ function toggleInlineFormat(kind) {
     editor.setSelectionRange(s + open.length, s + open.length + sel.length);
   }
   return true;
+}
+
+/* ---------- log file colouring (log.txt, or View > Language > Log File) ---------- */
+
+function registerLogLanguage() {
+  if (!window.hljs || hljs.getLanguage('logfile')) return;
+  hljs.registerLanguage('logfile', () => {
+    const level = (cls, words) => ({ className: cls, begin: '\\b(?:' + words + ')\\b', relevance: 0 });
+    const ERROR = level('logerror', 'error|errors|err|fatal|critical|crit|severe|alert|emerg|panic|failed|failure|fail|exception|[\\w.$]*(?:exception|error)');
+    const WARN = level('logwarn', 'warning|warn|wrn|caution|timeout|timed out|retrying|retry');
+    const INFO = level('loginfo', 'info|inf|information|notice');
+    const DEBUG = level('logdebug', 'debug|dbg|trace|trc|verbose|vrb|fine|finer|finest');
+    const OK = level('logok', 'ok|success|successful|successfully|succeeded|passed|completed|done|started|connected');
+    const TIME = {
+      className: 'logtime',
+      relevance: 0,
+      variants: [
+        { begin: '\\b\\d{4}-\\d{2}-\\d{2}(?:[ T]\\d{2}:\\d{2}(?::\\d{2}(?:[.,]\\d+)?)?(?:Z|[+-]\\d{2}:?\\d{2})?)?\\b' },
+        { begin: '\\b\\d{4}\\d{2}\\d{2}T\\d{6}(?:[.,]\\d+)?\\b' },
+        { begin: '\\b\\d{1,2}[/.]\\d{1,2}[/.]\\d{2,4}(?: \\d{1,2}:\\d{2}(?::\\d{2}(?:[.,]\\d+)?)?(?: ?[AP]M)?)?\\b' },
+        { begin: '\\b\\d{1,2}:\\d{2}:\\d{2}(?:[.,]\\d+)?\\b' },
+      ],
+    };
+    const GUID = { className: 'number', begin: '\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b', relevance: 0 };
+    // numbers, also with a unit stuck on (512MB, 30s, 250ms, 99%)
+    const NUMBER = { className: 'number', begin: '\\b(?:0x[0-9a-f]+|\\d+(?:\\.\\d+)*(?:[kmgt]?b|ms|s|%)?)(?![\\w.])', relevance: 0 };
+    const STRING = { className: 'string', variants: [{ begin: '"', end: '"', illegal: '\\n' }, { begin: "'(?=[^'\\n]{1,200}')", end: "'", illegal: '\\n' }], relevance: 0 };
+    // key=value or key:value (no space after the colon, so "space low: free" stays plain text)
+    const KEY = { className: 'attr', begin: '\\b[A-Za-z_][\\w.-]*(?=(?:\\s?=\\s?|:)[^\\s/])', relevance: 0 };
+    const PATH = { className: 'logpath', begin: '\\b[a-z]:\\\\[^\\s"\'<>|]*', relevance: 0 };
+    const BRACKET = { className: 'meta', begin: '\\[', end: '\\]', illegal: '\\n', contains: [ERROR, WARN, INFO, DEBUG, OK, TIME, NUMBER], relevance: 0 };
+    const STACK = { className: 'comment', begin: '^\\s+at\\s', end: '$', relevance: 0 };
+    return {
+      name: 'Log file',
+      case_insensitive: true,
+      contains: [STACK, TIME, GUID, BRACKET, STRING, PATH, ERROR, WARN, INFO, DEBUG, OK, KEY, NUMBER],
+    };
+  });
 }
 
 /* ---------- wiring ---------- */
