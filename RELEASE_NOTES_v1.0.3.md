@@ -5,7 +5,7 @@
 | **Tag** | `v1.0.3` |
 | **Target** | `main` |
 | **Release title** | `Notepad MD v1.0.3` |
-| **Binary to attach** | `src-tauri\target\release\NotepadMD-v1.0.3-win-x64.exe` (4.04 MB) |
+| **Binary to attach** | `src-tauri\target\release\NotepadMD-v1.0.3-win-x64.exe` (4.05 MB) |
 | **Set as the latest release** | ✔ |
 
 Everything below the line is the release description.
@@ -25,7 +25,7 @@ If you have an earlier version, open **About → About Notepad MD → Check for 
 
 ### New
 - **Rename a tab** by double-clicking its name. An untitled tab simply gets the new name; a saved file is renamed on disk.
-- **Links in the editor** are underlined. Double-click (or `Ctrl`+click) opens them in your browser; right-click a link for **Open Link in New Window**, **Save Link As** and **Copy Link**. Words inside links are no longer spell-checked.
+- **Links in the editor** are underlined. Double-click (or `Ctrl`+click) opens them in your browser; right-clicking a link adds **Open link in new window**, **Save link as** and **Copy link** to the top of the normal right-click menu (the same as in the preview). Words inside links are no longer spell-checked.
 - **Indent guides** in the editor, like Notepad++.
 - **Tab header font size** in Settings → General.
 - **Ticks in the View menu** show what's on (word wrap, toolbar, line numbers, layout, preview mode, spelling, dark theme).
@@ -35,4 +35,4 @@ If you have an earlier version, open **About → About Notepad MD → Check for 
 ### Download
 **[NotepadMD-v1.0.3-win-x64.exe](https://github.com/mccabedd/notepad-md/releases/download/v1.0.3/NotepadMD-v1.0.3-win-x64.exe)** is portable, so just download it and run it. It needs Windows 10 or 11 (64-bit).
 
-- **SHA-256:** `497ED82D9FA0ED017418D147B73479497DC2A139B6FBEA2F1EBC3977475550EC`
+- **SHA-256:** `8D79F5CEC30413C0492959C456EAB876149F875CA9F9B81A361198BD2A6BB38F`

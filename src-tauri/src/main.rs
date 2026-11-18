@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod instance;
+mod linkmenu;
 mod system;
 
 use std::fs;
@@ -234,6 +235,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .register_uri_scheme_protocol("localimg", |_ctx, req| instance::serve_local_image(&req))
+        .manage(linkmenu::HoverLink(Mutex::new(None)))
         .manage(AppState {
             initial_files: Mutex::new(initial_files),
             closing: AtomicBool::new(false),
@@ -253,6 +255,7 @@ fn main() {
             cmd_set_menu_visible,
             cmd_set_menu_checks,
             cmd_rename_file,
+            linkmenu::cmd_set_hover_link,
             system::cmd_app_info,
             system::cmd_register_file_types,
             system::cmd_unregister_file_types,
@@ -266,6 +269,9 @@ fn main() {
         ])
         .setup(|app| {
             instance::listen(app.handle().clone());
+            if let Some(w) = app.get_webview_window("main") {
+                linkmenu::install(&w);
+            }
             // Accelerator strings below are display-only hint text: every shortcut is actually
             // handled by the JS keydown handler in ui/renderer.js.
             let file_submenu = Submenu::with_items(

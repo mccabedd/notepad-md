@@ -2114,6 +2114,9 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-clipboard-manager",
  "tauri-plugin-dialog",
+ "webview2-com",
+ "windows",
+ "windows-core",
  "winreg",
 ]
 

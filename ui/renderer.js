@@ -560,15 +560,7 @@ function openUrl(url) {
   invoke('cmd_open_url', { url }).catch((e) => flashFindStatus('Could not open the link: ' + e));
 }
 
-/** Right-click on a link in the editor (the same choices as on a link in the preview). */
-function showLinkMenu(x, y, url) {
-  showContextMenu(x, y, [
-    { label: 'Open Link in New Window', icon: '↗', gesture: 'Double-click', action: () => openUrl(url) },
-    { label: 'Save Link As...', icon: '\u{1F5AB}', action: () => saveLinkAs(url) },
-    { label: 'Copy Link', icon: '⧉', action: () => clipboard.writeText(url).then(() => flashFindStatus('Link copied')) },
-  ]);
-}
-
+/** "Save link as" for a link in the editor: pick a file, then download the link into it. */
 async function saveLinkAs(url) {
   let name = 'download';
   try {
@@ -2505,12 +2497,7 @@ function wireDomEvents() {
   });
   editor.addEventListener('contextmenu', (e) => {
     if (!editor.classList.contains('hl-active')) return;
-    const linkSpan = [...editorHighlight.querySelectorAll('.ov-url')].find((s) => pointInRects(e.clientX, e.clientY, s.getClientRects()));
-    if (linkSpan && linkSpan.dataset.url) {
-      e.preventDefault();
-      showLinkMenu(e.clientX, e.clientY, linkSpan.dataset.url);
-      return;
-    }
+    // On a link, WebView2's own menu opens with the link items added at the top (linkmenu.rs).
     const span = [...editorHighlight.querySelectorAll('.spell-err')].find((s) =>
       pointInRects(e.clientX, e.clientY, s.getClientRects())
     );
@@ -2548,7 +2535,24 @@ function wireDomEvents() {
     if (!editor.classList.contains('hl-active')) return false;
     return [...editorHighlight.querySelectorAll('.ov-url')].some((s) => pointInRects(e.clientX, e.clientY, s.getClientRects()));
   };
+  // Tell the backend which link is under the mouse, so the right-click menu can offer it.
+  let hoverLinkSent = null;
+  const setHoverLink = (url) => {
+    if (url === hoverLinkSent) return;
+    hoverLinkSent = url;
+    invoke('cmd_set_hover_link', { url }).catch(() => {});
+  };
+  const linkAt = (e) => {
+    if (!editor.classList.contains('hl-active')) return null;
+    const s = [...editorHighlight.querySelectorAll('.ov-url')].find((x) => pointInRects(e.clientX, e.clientY, x.getClientRects()));
+    return (s && s.dataset.url) || null;
+  };
+  editor.addEventListener('mousedown', (e) => {
+    if (e.button === 2) setHoverLink(linkAt(e));
+  });
+  editor.addEventListener('mouseleave', () => setHoverLink(null));
   editor.addEventListener('mousemove', (e) => {
+    setHoverLink(linkAt(e));
     const over = overUrl(e);
     editor.classList.toggle('over-url', over);
     document.body.classList.toggle('ctrl-down', e.ctrlKey);
@@ -2889,6 +2893,14 @@ function wireMenuListeners() {
   listen('open-files', async (e) => {
     while (!sessionReady) await new Promise((r) => setTimeout(r, 100));
     for (const p of e.payload || []) await openPath(p);
+  });
+  // "Open link in new window" / "Save link as" / "Copy link" chosen in the editor's right-click menu.
+  listen('link-menu', (e) => {
+    const [action, url] = e.payload || [];
+    if (!url) return;
+    if (action === 'open') openUrl(url);
+    else if (action === 'save') saveLinkAs(url);
+    else if (action === 'copy') clipboard.writeText(url).then(() => flashFindStatus('Link copied'));
   });
   listen('menu-open', () => openFile());
   listen('menu-save', () => saveActive());

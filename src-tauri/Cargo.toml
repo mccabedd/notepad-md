@@ -16,6 +16,11 @@ serde_json = "1"
 open = "5"
 # Already in the dependency tree (no new download): registry access for file-type registration.
 winreg = "0.56"
+# Also already in the tree (Tauri uses them): adds "Open link in new window" etc. to WebView2's own
+# right-click menu for links in the editor.
+webview2-com = "0.39"
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com"] }
+windows-core = "0.62"
 
 [[bin]]
 name = "notepad-md"
