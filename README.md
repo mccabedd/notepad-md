@@ -19,7 +19,7 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 - **Rename a tab** by double-clicking its name: an untitled tab just gets the new name; a saved file is renamed on disk (in the same folder; it won't overwrite another file).
 - **One window** — opening a file while Notepad MD is already running (double-click, *Open with*, command line) opens it as a tab in the running window instead of starting a second copy.
 - New documents are numbered like Notepad++: a new tab takes the lowest free number (*Untitled*, *Untitled 2*, …). Empty untitled tabs are kept across restarts too.
-- **New tab** — the little **+** tab after the last tab (always there, even when the tabs scroll), `Ctrl+N`, or double-click the empty part of the tab bar.
+- **New tab** — the little **+** tab after the last tab (always there, even when the tabs scroll), `Ctrl+N`, or double-click the empty part of the tab bar. The caret is already in the new tab (in the editor, or in the preview in Preview Only), so you can start typing straight away.
 - **Tab right-click menu** — Save, Save As, Save All, Reload from Disk, Pin/Unpin, Close, Close Others / Close All (both keep pinned tabs), Reopen Closed Tab, Copy Full Path.
 - **Pinned tabs** — pin icon on the tab; pinned tabs stay at the left.
 - **Responsive with bigger files** — the editor's colours are redrawn line by line, so only the lines you change are redone; previews of medium files update after a short pause in typing; switching back to a tab reuses its preview when the text hasn't changed. In big files (logs), Find highlights every hit too.

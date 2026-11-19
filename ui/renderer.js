@@ -265,6 +265,39 @@ function lowestFreeUntitledNum(list) {
   return n;
 }
 
+/** A new empty tab, with the caret in it ready to type (+ tab, Ctrl+N, File > New, double-click). */
+function openNewTab() {
+  addDocAndActivate(newUntitledDoc());
+  focusForTyping();
+}
+
+/**
+ * Puts the keyboard focus where typing goes for the active tab: the editor, or the preview in
+ * Preview Only (Markdown previews are editable). Done again a moment later because a menu or
+ * button can take the focus back as it closes.
+ */
+function focusForTyping() {
+  const go = () => {
+    const doc = getActive();
+    if (!doc) return;
+    if (layoutMode === 'preview-only' && preview.getAttribute('contenteditable') === 'true') {
+      if (document.activeElement !== preview) {
+        preview.focus();
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(preview);
+        range.collapse(false); // caret at the end (the only place in a new, empty tab)
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    } else if (layoutMode !== 'preview-only' && document.activeElement !== editor) {
+      editor.focus();
+    }
+  };
+  go();
+  setTimeout(go, 60);
+}
+
 function newUntitledDoc() {
   const active = getActive();
   let layout = settings.newTabView;
@@ -2946,14 +2979,14 @@ function wireDomEvents() {
     if (btn) scrollTabs(Number(btn.dataset.dir));
   });
   tabbarEl.addEventListener('dblclick', (e) => {
-    if (e.target === tabbarEl) addDocAndActivate(newUntitledDoc());
+    if (e.target === tabbarEl) openNewTab();
   });
   // [+] after the tabs, and double-click on the empty part of the tab bar: a new tab.
   const tabNewBtn = document.getElementById('tab-new');
   tabNewBtn.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus in the editor
-  tabNewBtn.addEventListener('click', () => addDocAndActivate(newUntitledDoc())); // scrolls the new tab into view
+  tabNewBtn.addEventListener('click', openNewTab); // scrolls the new tab into view
   tabbarEl.parentElement.addEventListener('dblclick', (e) => {
-    if (e.target === tabbarEl.parentElement) addDocAndActivate(newUntitledDoc());
+    if (e.target === tabbarEl.parentElement) openNewTab();
   });
 
   // Ctrl+mouse wheel zooms the active tab (and stops WebView2's own page zoom).
@@ -3124,7 +3157,7 @@ function wireDomEvents() {
       toggleToolbar();
     } else if (key === 'n') {
       e.preventDefault();
-      addDocAndActivate(newUntitledDoc());
+      openNewTab();
     } else if (key === 'o') {
       e.preventDefault();
       openFile();
@@ -3219,7 +3252,7 @@ function wireMenuListeners() {
       fn(e);
       if (name.startsWith('menu-')) syncMenuChecks(true);
     });
-  listen('menu-new', () => addDocAndActivate(newUntitledDoc()));
+  listen('menu-new', openNewTab);
   // Another launch (double-clicked file, "Open with") handed its files to this window.
   listen('open-files', async (e) => {
     while (!sessionReady) await new Promise((r) => setTimeout(r, 100));
