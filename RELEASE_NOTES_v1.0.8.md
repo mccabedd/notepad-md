@@ -50,3 +50,6 @@ If you have an earlier version, open **About → About Notepad MD → Check for 
 **[NotepadMD-v1.0.8-win-x64.exe](https://github.com/mccabedd/notepad-md/releases/download/v1.0.8/NotepadMD-v1.0.8-win-x64.exe)** is portable, so just download it and run it. It needs Windows 10 or 11 (64-bit).
 
 - **SHA-256:** `18FD82826733A625AE38C378CC7F8250E1B00BD1EA4F5C233C2235B58E4CF270`
+
+### Licence
+Notepad MD is now open source under the [MIT licence](https://github.com/mccabedd/notepad-md/blob/main/LICENSE). Bundled components keep their own licences: see [THIRD_PARTY_NOTICES.md](https://github.com/mccabedd/notepad-md/blob/main/THIRD_PARTY_NOTICES.md).

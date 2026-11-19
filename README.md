@@ -119,6 +119,10 @@ cargo run
 - Rust unit tests (encoding, saving, registration in a throwaway registry key, updater checks): `cd src-tauri` then `cargo test`.
 - App tests drive the real exe through WebView2's DevTools port: `powershell -ExecutionPolicy Bypass -File tests\run-all.ps1` (build the release exe first). They work in `%TEMP%\notepadmd-tests` (or `NOTEPADMD_TEST_DIR`) with their own session, WebView2 profile and registry key, so your real settings, documents and file associations are never touched. `tests\bench.ps1 -Exe <path>` measures startup, typing, rendering and saving.
 
+## Licence
+
+Notepad MD is released under the [MIT licence](LICENSE). The bundled third-party components keep their own licences; their full texts are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 ## Third-party components
 
 - [marked](https://github.com/markedjs/marked) (MIT) — Markdown rendering
