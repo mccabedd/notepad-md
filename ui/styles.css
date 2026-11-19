@@ -707,7 +707,7 @@ body.nowrap .preview.code-view pre code {
   font-family: var(--preview-font-family, -apple-system, "Segoe UI", Tahoma, Arial, sans-serif);
   font-weight: var(--preview-font-weight, 400);
   font-style: var(--preview-font-style, normal);
-  font-size: var(--content-font-size);
+  font-size: var(--preview-font-size, var(--content-font-size));
   line-height: 1.6;
   outline: none;
 }
@@ -835,7 +835,7 @@ body.nowrap .preview.code-view pre code {
 }
 
 .preview.code-view pre code {
-  font-size: var(--content-font-size);
+  font-size: var(--preview-font-size, var(--content-font-size));
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: break-word;
@@ -1916,4 +1916,44 @@ summary:focus-visible,
 .modal-panel {
   border-radius: 8px;
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.28), 0 0 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Line numbers beside a code file's preview follow the preview's font size. */
+#line-numbers-preview {
+  font-size: var(--preview-font-size, var(--content-font-size));
+}
+
+/* [+] new tab: a little tab, always there, right after the last tab. When the tabs overflow it
+   stays in view beside the scroll arrows. */
+.tabbar {
+  flex: 0 1 auto;
+}
+.tab-new {
+  flex: 0 0 auto;
+  align-self: stretch;
+  width: 32px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tab-new:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.tab-new:active {
+  background: var(--pressed);
+}
+.tab-new:focus-visible {
+  outline-offset: -2px;
+}
+.tab-scroll {
+  margin-left: auto;
 }

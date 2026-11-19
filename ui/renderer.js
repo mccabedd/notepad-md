@@ -301,10 +301,16 @@ function toggleTheme() {
 
 function applyFontSize() {
   const doc = getActive();
-  const size = doc ? doc.fontSize : settings.newTabFontSize;
-  document.documentElement.style.setProperty('--content-font-size', size + 'px');
-  statusZoom.textContent = Math.round((size / settings.newTabFontSize) * 100) + '%';
-  statusZoom.title = size + 'px · Ctrl+wheel or Ctrl++ / Ctrl+- to zoom this tab, Ctrl+0 (or click) to reset';
+  // A tab's zoom is its size relative to the 100% size; the editor and preview each scale their
+  // own default size (Settings > Editor / Preview > Font size) by it.
+  const zoom = (doc ? doc.fontSize : settings.newTabFontSize) / settings.newTabFontSize;
+  const px = (n) => Math.round(n * zoom * 10) / 10;
+  const edit = px(settings.editFontSize);
+  const prev = px(settings.previewFontSize);
+  document.documentElement.style.setProperty('--content-font-size', edit + 'px');
+  document.documentElement.style.setProperty('--preview-font-size', prev + 'px');
+  statusZoom.textContent = Math.round(zoom * 100) + '%';
+  statusZoom.title = 'Editor ' + edit + 'px, preview ' + prev + 'px · Ctrl+wheel or Ctrl++ / Ctrl+- to zoom this tab, Ctrl+0 (or click) to reset';
 }
 
 /** Zooms the active tab only; every tab keeps its own size. */
@@ -2941,6 +2947,13 @@ function wireDomEvents() {
   });
   tabbarEl.addEventListener('dblclick', (e) => {
     if (e.target === tabbarEl) addDocAndActivate(newUntitledDoc());
+  });
+  // [+] after the tabs, and double-click on the empty part of the tab bar: a new tab.
+  const tabNewBtn = document.getElementById('tab-new');
+  tabNewBtn.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus in the editor
+  tabNewBtn.addEventListener('click', () => addDocAndActivate(newUntitledDoc())); // scrolls the new tab into view
+  tabbarEl.parentElement.addEventListener('dblclick', (e) => {
+    if (e.target === tabbarEl.parentElement) addDocAndActivate(newUntitledDoc());
   });
 
   // Ctrl+mouse wheel zooms the active tab (and stops WebView2's own page zoom).

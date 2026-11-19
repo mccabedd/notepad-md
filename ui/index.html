@@ -8,6 +8,7 @@
 <body>
   <div class="tabbar-wrap">
     <div id="tabbar" class="tabbar"></div>
+    <button id="tab-new" class="tab-new" title="New tab (Ctrl+N)" aria-label="New tab">+</button>
     <div id="tab-scroll" class="tab-scroll hidden">
       <button data-dir="-1" title="Scroll tabs left">&#8249;</button>
       <button data-dir="1" title="Scroll tabs right">&#8250;</button>
@@ -204,6 +205,7 @@
           <label class="row">Tab width <select data-s="tabSize"><option value="2">2 spaces</option><option value="4">4 spaces</option><option value="8">8 spaces</option></select></label>
           <label class="row">Font <input type="text" data-s="editFont" list="font-list" /></label>
           <label class="row">Style <select data-s="editStyle"><option value="normal">Regular</option><option value="bold">Bold</option><option value="italic">Italic</option><option value="bold-italic">Bold Italic</option></select></label>
+          <label class="row">Font size <span><input type="number" data-s="editFontSize" min="8" max="40" step="1" /> px</span></label>
           <div class="row"><span>Text colour</span> <span class="color"><input type="color" data-s="editColor" /><em data-theme-flag="editColor">theme</em><button data-clear="editColor" title="Follow the light/dark theme">Use theme</button></span></div>
           <div class="row"><span>Background</span> <span class="color"><input type="color" data-s="editBg" /><em data-theme-flag="editBg">theme</em><button data-clear="editBg" title="Follow the light/dark theme">Use theme</button></span></div>
           <p class="note">Syntax colours (code, Markdown markup) keep their own colours; the text colour applies to plain text.</p>
@@ -212,14 +214,14 @@
           <h3>Preview</h3>
           <label class="row">Font <input type="text" data-s="previewFont" list="font-list" /></label>
           <label class="row">Style <select data-s="previewStyle"><option value="normal">Regular</option><option value="bold">Bold</option><option value="italic">Italic</option><option value="bold-italic">Bold Italic</option></select></label>
+          <label class="row">Font size <span><input type="number" data-s="previewFontSize" min="8" max="40" step="1" /> px</span></label>
           <div class="row"><span>Text colour</span> <span class="color"><input type="color" data-s="previewColor" /><em data-theme-flag="previewColor">theme</em><button data-clear="previewColor" title="Follow the light/dark theme">Use theme</button></span></div>
           <div class="row"><span>Background</span> <span class="color"><input type="color" data-s="previewBg" /><em data-theme-flag="previewBg">theme</em><button data-clear="previewBg" title="Follow the light/dark theme">Use theme</button></span></div>
         </section>
         <section>
           <h3>New tabs</h3>
           <label class="row">Default view <select data-s="newTabView"><option value="edit-only">Edit Only</option><option value="preview-only">Preview Only</option><option value="split-ep">Edit Left / Preview Right</option><option value="split-pe">Preview Left / Edit Right</option><option value="same">Same as the current tab</option></select></label>
-          <label class="row">Font size <span><input type="number" data-s="newTabFontSize" min="8" max="40" step="1" /> px</span></label>
-          <p class="note">The default view is used for new tabs and for Markdown, text and BBCode files you open; code and config files always open in Edit Only. Ctrl+0 resets a tab to the default font size.</p>
+          <p class="note">The default view is used for new tabs and for Markdown, text and BBCode files you open; code and config files always open in Edit Only. Font sizes are set under Editor and Preview; Ctrl+mouse wheel zooms one tab, and Ctrl+0 puts it back to 100%.</p>
         </section>
         <section>
           <h3>Files</h3>
@@ -265,7 +267,7 @@
       </div>
       <div class="about-body">
         <img src="app-icon.png" alt="" width="64" height="64" />
-        <div class="about-name">NotePad-MD <span id="about-version">v1.0.8</span></div>
+        <div class="about-name">NotePad-MD <span id="about-version">v1.0.9</span></div>
         <a href="https://github.com/mccabedd/notepad-md" id="about-link">https://github.com/mccabedd/notepad-md</a>
         <div>Created by David McCabe</div>
         <button id="about-update" class="primary">Check for Updates</button>

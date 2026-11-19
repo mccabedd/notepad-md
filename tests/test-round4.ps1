@@ -66,7 +66,7 @@ $r = J @"
 const set = (k, v) => { const el = settingsEl.querySelector('[data-s=' + k + ']'); if (el.type === 'checkbox') el.checked = v; else el.value = v; el.dispatchEvent(new Event(el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input', {bubbles:true})); };
 set('editFont', 'Courier New'); set('editStyle', 'bold-italic'); set('editColor', '#112233'); set('editBg', '#fff8e0');
 set('previewFont', 'Georgia'); set('previewStyle', 'italic'); set('previewColor', '#334455'); set('previewBg', '#eef7ff');
-set('tabSize', '8'); set('lineNumbers', true); set('newTabView', 'split-ep'); set('newTabFontSize', '18');
+set('tabSize', '8'); set('lineNumbers', true); set('newTabView', 'split-ep'); set('editFontSize', '18'); set('previewFontSize', '18');
 await new Promise(r=>requestAnimationFrame(()=>r()));
 const e = getComputedStyle(editor), h = getComputedStyle(editorHighlight), p = getComputedStyle(preview), w = getComputedStyle(editorHighlight.parentElement);
 return [e.fontFamily.split(',')[0], e.fontWeight, e.fontStyle, h.fontFamily.split(',')[0], h.fontWeight, h.color, w.backgroundColor, e.tabSize, p.fontFamily.split(',')[0], p.fontStyle, p.color, p.backgroundColor, lineNumbersVisible].join('|');
@@ -77,10 +77,10 @@ $r = J "settingsEl.querySelector('[data-clear=previewBg]').click(); await new Pr
 T '"Use theme" clears a custom colour' $r ($r -like '|theme|rgb(*' -and $r -notlike '*238, 247, 255*')
 Send-Key @() 'Escape' 'Escape' 0x1B
 T 'Esc closes Settings' (J "return settingsEl.classList.contains('hidden')") ((J "return settingsEl.classList.contains('hidden')") -eq $true)
-$r = J "addDocAndActivate(newUntitledDoc()); return getActive().layoutMode + '|' + getActive().fontSize + '|' + statusZoom.textContent"
-T 'New tab uses default view + font size from Settings' $r ($r -eq 'split-ep|18|100%')
-$r = J "await openPath('$(P 'notes.md')'); const a=getActive().layoutMode; await openPath('$(P 'data.json')'); return a + '|' + getActive().layoutMode + '|' + getActive().fontSize"
-T 'Opened Markdown follows default view; code stays Edit Only' $r ($r -eq 'split-ep|edit-only|18')
+$r = J "addDocAndActivate(newUntitledDoc()); return getActive().layoutMode + '|' + getComputedStyle(editor).fontSize + '|' + getComputedStyle(preview).fontSize + '|' + statusZoom.textContent"
+T 'New tab uses default view + editor/preview font sizes from Settings' $r ($r -eq 'split-ep|18px|18px|100%')
+$r = J "await openPath('$(P 'notes.md')'); const a=getActive().layoutMode; await openPath('$(P 'data.json')'); return a + '|' + getActive().layoutMode + '|' + getComputedStyle(editor).fontSize"
+T 'Opened Markdown follows default view; code stays Edit Only' $r ($r -eq 'split-ep|edit-only|18px')
 
 # ---------- table editing ----------
 J "await openPath('$(P 'table.md')'); setLayoutMode('split-ep'); return 1" | Out-Null
@@ -134,16 +134,16 @@ RightClickCell 1 0; MenuClick 'Delete table'
 T 'Delete table' (J "return getActive().content.includes('|') + '|' + !!preview.querySelector('table')") ((J "return getActive().content.includes('|') + '|' + !!preview.querySelector('table')") -eq 'false|false')
 
 # ---------- everything survives a restart ----------
-$before = J "return JSON.stringify({wrap:settings.wordWrap, menu:settings.menuBar, side:settings.sidebar, s:settings.editFont+settings.editStyle+settings.editColor+settings.previewFont+settings.newTabView+settings.newTabFontSize+settings.tabSize, ln:lineNumbersVisible})"
+$before = J "return JSON.stringify({wrap:settings.wordWrap, menu:settings.menuBar, side:settings.sidebar, s:settings.editFont+settings.editStyle+settings.editColor+settings.previewFont+settings.newTabView+settings.editFontSize+settings.previewFontSize+settings.tabSize, ln:lineNumbersVisible})"
 J "toggleMenuBar(); await new Promise(r=>setTimeout(r,300)); return 1" | Out-Null   # leave the menu bar hidden
-$before = J "return JSON.stringify({wrap:settings.wordWrap, menu:settings.menuBar, side:settings.sidebar, s:settings.editFont+settings.editStyle+settings.editColor+settings.previewFont+settings.newTabView+settings.newTabFontSize+settings.tabSize, ln:lineNumbersVisible})"
+$before = J "return JSON.stringify({wrap:settings.wordWrap, menu:settings.menuBar, side:settings.sidebar, s:settings.editFont+settings.editStyle+settings.editColor+settings.previewFont+settings.newTabView+settings.editFontSize+settings.previewFontSize+settings.tabSize, ln:lineNumbersVisible})"
 $hwnd = [KB]::MainWin([uint32]$script:proc.Id)
 [void][W32]::PostMessage($hwnd, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
 $exited = $script:proc.WaitForExit(6000)
 try { $script:ws.Dispose() } catch {}
 Start-App $Exe $null -KeepSession
 Start-Sleep -Milliseconds 1200
-$after = J "return JSON.stringify({wrap:settings.wordWrap, menu:settings.menuBar, side:settings.sidebar, s:settings.editFont+settings.editStyle+settings.editColor+settings.previewFont+settings.newTabView+settings.newTabFontSize+settings.tabSize, ln:lineNumbersVisible})"
+$after = J "return JSON.stringify({wrap:settings.wordWrap, menu:settings.menuBar, side:settings.sidebar, s:settings.editFont+settings.editStyle+settings.editColor+settings.previewFont+settings.newTabView+settings.editFontSize+settings.previewFontSize+settings.tabSize, ln:lineNumbersVisible})"
 T 'Word wrap, menu bar, settings survive a restart' "exited=$exited before=$before after=$after" ($exited -and $before -eq $after -and $after -like '*"wrap":false,"menu":false*')
 T 'Menu bar really hidden after restart' "GetMenu present=$(MenuShown)" (-not (MenuShown))
 J "toggleMenuBar(); return 1" | Out-Null; Start-Sleep -Milliseconds 300

@@ -17,7 +17,9 @@ const DEFAULT_SETTINGS = {
   autoPair: true, // auto-close brackets and quotes in the editor
   windowsAccent: true, // follow the Windows accent colour (links, selected items, buttons)
   newTabView: 'preview-only', // or 'same' = same view as the tab you are on
-  newTabFontSize: 14,
+  newTabFontSize: 14, // the size that counts as 100% when a tab is zoomed (no longer shown in Settings)
+  editFontSize: 14, // editor text size at 100%, px
+  previewFontSize: 14, // preview text size at 100%, px
   editFont: 'Consolas',
   editStyle: 'normal',
   editColor: '', // '' = follow the theme
@@ -46,6 +48,13 @@ function loadSettings(saved) {
     }
   }
   settings.newTabFontSize = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(settings.newTabFontSize)));
+  // Before v1.0.9 one 'font size for new tabs' set both: carry a custom value over to the two new settings.
+  if (saved && typeof saved === 'object' && saved.editFontSize === undefined && typeof saved.newTabFontSize === 'number') {
+    settings.editFontSize = settings.newTabFontSize;
+    settings.previewFontSize = settings.newTabFontSize;
+  }
+  settings.editFontSize = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(settings.editFontSize)));
+  settings.previewFontSize = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(settings.previewFontSize)));
   if (![2, 4, 8].includes(settings.tabSize)) settings.tabSize = 4;
   settings.tabFontSize = clampTabFont(settings.tabFontSize);
 }
@@ -99,6 +108,7 @@ function applySettings() {
     window.addEventListener('focus', loadSystemAccent);
   }
   applyAccent();
+  try { applyFontSize(); } catch (e) { /* page still starting */ }
   const [ew, es] = FONT_STYLES[settings.editStyle] || FONT_STYLES.normal;
   const [pw, ps] = FONT_STYLES[settings.previewStyle] || FONT_STYLES.normal;
   setVar('--edit-font-family', fontStack(settings.editFont, true));
@@ -514,7 +524,7 @@ function onSettingInput(e) {
     v = parseInt(el.value, 10);
     if (isNaN(v)) return;
     if (key === 'tabFontSize') v = clampTabFont(parseFloat(el.value));
-    if (key === 'newTabFontSize') v = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, v));
+    if (key === 'newTabFontSize' || key === 'editFontSize' || key === 'previewFontSize') v = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, v));
   } else if (key === 'tabSize') v = parseInt(el.value, 10);
   else v = el.value;
   if (LIVE_SETTINGS[key]) {
