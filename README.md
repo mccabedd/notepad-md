@@ -21,7 +21,10 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 - New documents are numbered like Notepad++: a new tab takes the lowest free number (*Untitled*, *Untitled 2*, …). Empty untitled tabs are kept across restarts too.
 - **Tab right-click menu** — Save, Save As, Save All, Reload from Disk, Pin/Unpin, Close, Close Others / Close All (both keep pinned tabs), Reopen Closed Tab, Copy Full Path.
 - **Pinned tabs** — pin icon on the tab; pinned tabs stay at the left.
-- Files keep their encoding (UTF-8, UTF-8 BOM, UTF-16, ANSI) and line endings (CRLF/LF) when saved.
+- **Responsive with bigger files** — the editor's colours are redrawn line by line, so only the lines you change are redone; previews of medium files update after a short pause in typing; switching back to a tab reuses its preview when the text hasn't changed. In big files (logs), Find highlights every hit too.
+- Files keep their encoding (UTF-8, UTF-8 BOM, UTF-16, ANSI / Windows-1252) and line endings (CRLF/LF) when saved. ANSI files show smart quotes, € and accents correctly; if you type something ANSI can't store (e.g. Japanese), the file is saved as UTF-8 instead and the status bar tells you.
+- **Safe saving** — a save writes to a temporary file next to the document and then swaps it in, so a crash, full disk or locked file never leaves a half-written document. If another program changed the file since you opened it (even a moment before saving), you're asked before it is overwritten.
+- **Safe preview** — HTML inside a Markdown document is shown, but anything that could run code or load another page (scripts, frames, forms, `onclick`-style attributes, `javascript:` links) is left out. It stays in your Markdown source, even when you edit in the preview.
 
 ### Views
 - **Per-tab layout** — Edit Only, Preview Only, Edit Left/Preview Right, Preview Left/Edit Right (`Ctrl+Alt+1`…`4`, View menu, or the right-hand **sidebar** icons). Drag the divider to resize the split.
@@ -31,7 +34,7 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 - Show/hide the **menu bar** (tap `Alt`), **sidebar** (`Ctrl+Shift+E`), **toolbar** (`Ctrl+T`) and **status bar** (View menu).
 - Light / dark theme (`Ctrl+Shift+D`) or follow Windows.
 - The **View** menu shows a tick next to whatever is on (toolbar, outline, word wrap, line numbers, follow file, current layout, preview mode, spelling, dark theme). Menus: File, Edit, View, Search, About.
-- Line numbers (`Ctrl+Shift+L`) beside the editor (not the preview); bookmarked lines are shown in their bookmark colour.
+- Line numbers (`Ctrl+Shift+L`) beside the editor (not the preview); bookmarked lines are shown in their bookmark colour. The column widens for 5- and 6-digit line numbers.
 - **Outline** (`Ctrl+Shift+O`, View menu) — a panel on the left listing the headings of a Markdown document; click one to jump to it. It follows your typing and highlights the section you are in.
 - **Go to Line** (`Ctrl+G`, Edit menu).
 
@@ -64,7 +67,7 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 - **Bookmarks in the editor** — `Ctrl+F2` toggle, `F2` / `Shift+F2` next / previous. Bookmarks follow their text when lines are inserted or deleted above them, and are saved with the session.
 
 ### Settings (`Ctrl+,` or File > Settings)
-Theme; reopen tabs on start; menu bar / toolbar / sidebar / status bar; outline panel; tab header font size; line numbers; word wrap; auto-close brackets and quotes; tab width; editor font, style (regular/bold/italic), text colour and background; preview font, style, text colour and background ("Use theme" returns a colour to the light/dark theme); default view and font size for new tabs; spell checking and language; Reset to defaults.
+Theme; use the Windows accent colour (on by default; links, selected items and buttons follow your Windows colour); reopen tabs on start; menu bar / toolbar / sidebar / status bar; outline panel; tab header font size; line numbers; word wrap; auto-close brackets and quotes; tab width; editor font, style (regular/bold/italic), text colour and background; preview font, style, text colour and background ("Use theme" returns a colour to the light/dark theme); default view and font size for new tabs; spell checking and language; Reset to defaults.
 
 - **Import / Export** — save all settings (plus your spelling dictionary) to a `.json` file and load them on another PC. Importing merges the dictionary.
 - **Edit in Notepad-MD** — a checkbox adds *Edit in Notepad-MD* (with the app's icon) to Explorer's right-click menu for every file (per user, no admin needed). On Windows 11 it's under *Show more options* / Shift+right-click, because the new compact menu only lists packaged (Store/MSIX) apps.
@@ -106,9 +109,15 @@ cargo run
   - `settings.js` — Settings dialog, word wrap / sidebar / menu bar / status bar
   - `table.js` — table editing in the preview
   - `bbcode.js` — BBCode grammar and preview renderer
+  - `sanitize.js` — removes unsafe HTML from the Markdown preview, printouts and HTML exports
   - `spell-worker.js` — spellchecker (runs off the UI thread)
 - `ui/vendor/` — third-party libraries (see below)
-- `src-tauri/` — Rust backend (`linkmenu.rs` adds the link items to the editor's right-click menu): `main.rs` (window/menu setup, file I/O with encoding detection, session storage, menu-bar visibility) `system.rs` (file-type registration, self-update via Windows' built-in `curl.exe` / `certutil`) and `instance.rs` (single instance, local images for the preview)
+- `src-tauri/` — Rust backend (`linkmenu.rs` adds the link items to the editor's right-click menu): `main.rs` (window/menu setup, file commands, session storage, menu-bar visibility), `fileio.rs` (encoding detection incl. Windows-1252, crash-safe saving) `system.rs` (file-type registration, self-update via Windows' built-in `curl.exe` / `certutil`: only from this repository's GitHub releases, and only when the download matches the SHA-256 GitHub publishes for it) and `instance.rs` (single instance, local images for the preview)
+
+## Tests
+
+- Rust unit tests (encoding, saving, registration in a throwaway registry key, updater checks): `cd src-tauri` then `cargo test`.
+- App tests drive the real exe through WebView2's DevTools port: `powershell -ExecutionPolicy Bypass -File tests\run-all.ps1` (build the release exe first). They work in `%TEMP%\notepadmd-tests` (or `NOTEPADMD_TEST_DIR`) with their own session, WebView2 profile and registry key, so your real settings, documents and file associations are never touched. `tests\bench.ps1 -Exe <path>` measures startup, typing, rendering and saving.
 
 ## Third-party components
 

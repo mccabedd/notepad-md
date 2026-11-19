@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS = {
   tabFontSize: 12.5, // tab header text, px
   outline: false, // the headings panel at the left
   autoPair: true, // auto-close brackets and quotes in the editor
+  windowsAccent: true, // follow the Windows accent colour (links, selected items, buttons)
   newTabView: 'preview-only', // or 'same' = same view as the tab you are on
   newTabFontSize: 14,
   editFont: 'Consolas',
@@ -68,8 +69,36 @@ function setVar(name, value) {
 const COLOR_RE = /^#[0-9a-f]{6}$/i;
 
 /** Applies every setting to the page (cheap; safe to call after any change). */
+/* Windows accent colour: read from Windows (again whenever the window gets focus, in case it was
+ * changed in Settings > Personalisation) and used for links, selected items and buttons. */
+let systemAccent = null;
+let accentRequested = false;
+
+async function loadSystemAccent() {
+  try {
+    systemAccent = await invoke('cmd_system_accent');
+  } catch (e) {
+    systemAccent = null;
+  }
+  applyAccent();
+}
+
+function applyAccent() {
+  const on = !!(settings.windowsAccent && systemAccent && COLOR_RE.test(systemAccent.light) && COLOR_RE.test(systemAccent.dark));
+  setVar('--win-accent-light', on ? systemAccent.light : '');
+  setVar('--win-accent-dark', on ? systemAccent.dark : '');
+  document.documentElement.classList.toggle('win-accent', on);
+}
+
 function applySettings() {
   if (typeof syncMenuChecks === "function") syncMenuChecks();
+  try { stashRenderGen++; } catch (e) { /* page still starting */ }
+  if (!accentRequested) {
+    accentRequested = true;
+    loadSystemAccent();
+    window.addEventListener('focus', loadSystemAccent);
+  }
+  applyAccent();
   const [ew, es] = FONT_STYLES[settings.editStyle] || FONT_STYLES.normal;
   const [pw, ps] = FONT_STYLES[settings.previewStyle] || FONT_STYLES.normal;
   setVar('--edit-font-family', fontStack(settings.editFont, true));
@@ -261,7 +290,8 @@ async function checkForUpdates() {
     aboutStatus.textContent = 'Downloading ' + (u.asset_name || 'the update') + (u.asset_size ? ' (' + (u.asset_size / 1048576).toFixed(1) + ' MB)' : '') + '...';
     saveDocView(getActive());
     await saveSessionNow(); // the new version reopens every tab from this
-    await invoke('cmd_install_update', { assetUrl: u.asset_url, digest: u.digest || null, size: u.asset_size || null });
+    // The Rust side looks the release up again and verifies it; it only needs to know which version was agreed to.
+    await invoke('cmd_install_update', { version: u.latest });
     aboutStatus.textContent = 'Installed. Restarting...';
   } catch (e) {
     aboutStatus.textContent = String(e && e.message ? e.message : e);

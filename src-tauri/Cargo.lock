@@ -2105,7 +2105,7 @@ dependencies = [
 
 [[package]]
 name = "notepad-md"
-version = "1.0.7"
+version = "1.0.8"
 dependencies = [
  "open",
  "serde",

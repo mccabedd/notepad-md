@@ -9,7 +9,7 @@ const LARGE_FILE_CHARS = 5 * 1024 * 1024; // above this a file opens in the ligh
 /* ---------- files changed by other programs ---------- */
 
 function setDiskStat(doc, st) {
-  doc.disk = st && st.mtime !== undefined ? { mtime: st.mtime, size: st.size } : null;
+  doc.disk = st && st.mtime != null ? { mtime: st.mtime, size: st.size } : null;
 }
 
 function sameStat(a, b) {
@@ -197,15 +197,24 @@ function updateDiskNotice() {
 }
 
 /** Before saving over a file: was it changed by something else since we read it? */
+/**
+ * Returns false when the user cancels, otherwise { expect }: the file's state as just checked,
+ * which the save passes along so a change made in the moment before writing is still caught.
+ */
 async function confirmOverwriteIfChanged(doc, path) {
-  if (!doc.path || !doc.disk || !samePath(doc.path, path)) return true;
+  if (!doc.path || !doc.disk || !samePath(doc.path, path)) return { expect: null };
   let st = null;
   try {
     [st] = await invoke('cmd_file_stat', { paths: [path] });
   } catch (e) {
-    return true;
+    return { expect: null };
   }
-  if (!st || sameStat(st, doc.disk) || sameStat(st, doc.ignoredDisk)) return true;
+  if (!st) return { expect: null };
+  if (sameStat(st, doc.disk) || sameStat(st, doc.ignoredDisk)) return { expect: st };
+  return (await askOverwriteChanged(doc)) ? { expect: null } : false;
+}
+
+function askOverwriteChanged(doc) {
   return dialogApi.ask('"' + tabTitle(doc) + '" was changed outside Notepad MD after you opened it.\n\nOverwrite it with your version?', {
     title: 'File Changed on Disk',
     kind: 'warning',
@@ -494,7 +503,7 @@ body.np-doc { max-width: 880px; margin: 32px auto; padding: 0 24px; }
 function renderDocHtml(doc, forFile) {
   const render = langInfo(doc).render;
   const box = document.createElement('div');
-  if (render === 'markdown') box.innerHTML = marked_.parse(doc.content);
+  if (render === 'markdown') box.innerHTML = sanitizeHtml(marked_.parse(doc.content));
   else if (render === 'bbcode') box.innerHTML = renderBBCode(doc.content);
   else box.innerHTML = '<pre><code class="hljs">' + highlightCode(doc.content, langInfo(doc).hljs) + '</code></pre>';
   if (render !== 'code' && window.hljs) {
@@ -912,7 +921,7 @@ function toggleInlineFormat(kind) {
 // Above HIGHLIGHT_MAX_CHARS the editor can't recolour on every keystroke (a 3 MB log takes ~1.5 s).
 // Instead it shows plain text while you type and colours the whole file once you pause, in a
 // background worker. The result is kept per tab, so switching back is instant. Find hits and
-// bookmarks are not drawn in this mode (the selection still shows where you are).
+// bookmarks are drawn on top (only lines that change are redrawn).
 const LAZY_HIGHLIGHT_MAX = 4 * 1024 * 1024; // drawing more takes the browser several seconds
 const LAZY_DELAY = 500;
 let lazyTimer = 0;
@@ -923,11 +932,13 @@ function hideOverlay() {
   editor.classList.remove('hl-active');
   editorHighlight.classList.add('hidden');
   editorHighlight.innerHTML = '';
+  resetOverlayLines();
   lazyShown = null;
 }
 
 function showLargeOverlay(doc, text, lang, html) {
   editorHighlight.innerHTML = html + (text.endsWith('\n') ? ' ' : '');
+  resetOverlayLines();
   editorHighlight.classList.remove('hidden');
   editor.classList.add('hl-active');
   editorHighlight.scrollTop = editor.scrollTop;
@@ -937,6 +948,25 @@ function showLargeOverlay(doc, text, lang, html) {
 
 /** renderEditorOverlay() for text over HIGHLIGHT_MAX_CHARS. */
 function renderLargeOverlay(doc, text, info) {
+  // Find hits and bookmarks are drawn too (on the colours if this text is already coloured,
+  // otherwise on plain text). Only changed lines are redrawn, so this stays quick.
+  const decos = doc && text === doc.content && text.length <= LAZY_HIGHLIGHT_MAX ? editorDecorations(doc) : [];
+  if (decos.length) {
+    clearTimeout(lazyTimer);
+    if (lazyShown) {
+      editorHighlight.replaceChildren();
+      resetOverlayLines();
+      lazyShown = null;
+    }
+    editor.classList.add('hl-active');
+    editorHighlight.classList.remove('hidden');
+    const { lines, exact } = largeOverlayLines(doc, text, info);
+    patchOverlayLines(doc, text, lines, decos, [], false, false);
+    editorHighlight.scrollTop = editor.scrollTop;
+    editorHighlight.scrollLeft = editor.scrollLeft;
+    if (!exact && info.hljs) lazyTimer = setTimeout(() => colourLargeDoc(doc), LAZY_DELAY);
+    return;
+  }
   if (!doc || !info.hljs || text.length > LAZY_HIGHLIGHT_MAX) {
     clearTimeout(lazyTimer);
     if (editor.classList.contains('hl-active') || lazyShown) hideOverlay();
@@ -958,6 +988,27 @@ function renderLargeOverlay(doc, text, info) {
   lazyTimer = setTimeout(() => colourLargeDoc(doc), LAZY_DELAY);
 }
 
+/**
+ * Lines of the big file's layer: the background colouring where the text still matches it, and
+ * plain text for lines edited since (they're recoloured after a pause). `exact` = fully coloured.
+ */
+function largeOverlayLines(doc, text, info) {
+  const c = doc.hlCache;
+  if (!info.hljs || !c || c.lang !== info.hljs) return { lines: splitHtmlLines(escapeHtml(text)), exact: false };
+  if (!c.lines) c.lines = splitHtmlLines(c.html);
+  if (c.text === text) return { lines: c.lines, exact: true };
+  if (!c.textLines) c.textLines = c.text.split('\n');
+  const oldT = c.textLines;
+  const newT = text.split('\n');
+  const max = Math.min(oldT.length, newT.length);
+  let p = 0;
+  while (p < max && oldT[p] === newT[p]) p++;
+  let s = 0;
+  while (s < max - p && oldT[oldT.length - 1 - s] === newT[newT.length - 1 - s]) s++;
+  const mid = newT.slice(p, newT.length - s).map(escapeHtml);
+  return { lines: c.lines.slice(0, p).concat(mid, c.lines.slice(c.lines.length - s)), exact: false };
+}
+
 async function colourLargeDoc(doc) {
   if (!docs.includes(doc) || doc.id !== activeId) return;
   const text = editor.value;
@@ -974,7 +1025,8 @@ async function colourLargeDoc(doc) {
   if (html === null) html = highlightCode(text, info.hljs); // a language only the page knows (BBCode)
   if (/(^|\n)[ \t]/.test(text)) html = addIndentGuides(html);
   doc.hlCache = { text, lang: info.hljs, html };
-  showLargeOverlay(doc, text, info.hljs, html);
+  if (editorDecorations(doc).length) renderEditorOverlay(); // keep find hits / bookmarks on top
+  else showLargeOverlay(doc, text, info.hljs, html);
 }
 
 let hlWorker = null;

@@ -673,6 +673,12 @@ body.nowrap .preview.code-view pre code {
   z-index: 0;
 }
 
+/* One block per line: after an edit the browser only lays out the changed line again, not the
+   whole file (the text and wrapping are identical to the inline layout). */
+.editor-highlight .ovl {
+  display: block;
+}
+
 /* Overlay colours/underlines only: never change glyph widths (bold/italic) or it drifts out of line. */
 .editor-highlight * {
   font-weight: inherit !important;
@@ -1826,3 +1832,88 @@ body.ctrl-down .editor.over-url {
 .hljs-logok { color: var(--log-ok); }
 .hljs-logtime { color: var(--log-time); }
 .hljs-logpath { color: var(--log-path); }
+
+/* ---------- Windows 11 polish ----------
+ * Windows typography, the system accent colour, softer hover shading, visible keyboard focus and
+ * Windows 11-style menus. Sizes and layout are unchanged. */
+
+:root[data-theme="light"] { --hover: rgba(0, 0, 0, 0.06); --pressed: rgba(0, 0, 0, 0.1); --menu-shadow: 0 8px 16px rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.12); }
+:root[data-theme="dark"] { --hover: rgba(255, 255, 255, 0.07); --pressed: rgba(255, 255, 255, 0.11); --menu-shadow: 0 8px 16px rgba(0, 0, 0, 0.36), 0 0 2px rgba(0, 0, 0, 0.3); }
+
+/* The Windows accent colour (Settings > "Use the Windows accent colour"), in the shade Windows
+ * itself uses for each theme. */
+:root.win-accent[data-theme="light"] { --accent: var(--win-accent-light); --selection: color-mix(in srgb, var(--win-accent-light) 25%, transparent); }
+:root.win-accent[data-theme="dark"] { --accent: var(--win-accent-dark); --selection: color-mix(in srgb, var(--win-accent-dark) 30%, transparent); }
+
+html, body {
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+}
+
+/* Keyboard focus: a clear accent ring on anything reached with Tab (not on mouse clicks). */
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.ctx-menu button:focus-visible,
+.adv-row:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Hover/pressed shading like Windows 11 (a light wash instead of the border grey). */
+.tab:hover:not(.active) { background: var(--hover); }
+.tab-close:hover,
+.tab-pin:hover,
+.sidebar button:hover,
+.status-btn:hover,
+.toolbar button:hover,
+.outline-head button:hover,
+.ctx-menu button:hover:not(:disabled) {
+  background: var(--hover);
+}
+.sidebar button:active,
+.toolbar button:active,
+.ctx-menu button:active:not(:disabled),
+.modal button:active:not(:disabled) {
+  background: var(--pressed);
+}
+.sidebar button.active { background: var(--hover); }
+
+/* Tab close button: a square hit area like Notepad's. */
+.tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 4px;
+}
+
+/* Right-click menus: Windows 11 shape and spacing. */
+.ctx-menu {
+  padding: 4px;
+  border-radius: 8px;
+  box-shadow: var(--menu-shadow);
+}
+.ctx-menu button {
+  padding: 6px 12px 6px 8px;
+  border-radius: 4px;
+}
+.ctx-sep { margin: 4px -4px; }
+
+/* Dialog buttons: Windows 11 proportions. */
+.modal button {
+  min-height: 28px;
+  padding: 4px 12px;
+}
+.modal button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 88%, #fff);
+}
+.modal-panel {
+  border-radius: 8px;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.28), 0 0 2px rgba(0, 0, 0, 0.2);
+}

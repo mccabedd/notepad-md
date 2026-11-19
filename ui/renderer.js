@@ -177,6 +177,11 @@ function setupMarkdownEngine() {
       return /^(https?:\/\/|www\.)\S+$/i.test(t) || /^[^\s@]+@[^\s@]+$/.test(t) ? t : content;
     },
   });
+  // HTML the preview refused to show (scripts, frames...) goes back into the Markdown unchanged.
+  turndownService.addRule('keptRawHtml', {
+    filter: (node) => node.nodeName === 'WBR' && node.hasAttribute('data-np-raw'),
+    replacement: (content, node) => node.getAttribute('data-np-raw'),
+  });
   turndownService.addRule('codeCopyButton', {
     filter: (node) => node.nodeName === 'BUTTON' && node.classList.contains('code-copy-btn'),
     replacement: () => '',
@@ -424,8 +429,17 @@ function toggleLineNumbers() {
 function updateLineNumbers() {
   if (!lineNumbersVisible) return;
   const doc = getActive();
-  const count = editor.value.split('\n').length;
+  let count = 1;
+  const v = editor.value;
+  for (let i = v.indexOf('\n'); i !== -1; i = v.indexOf('\n', i + 1)) count++;
   const bms = (doc && doc.bookmarks) || {};
+  // Typing within a line changes nothing here: skip rebuilding thousands of numbers.
+  const key = count + '|' + JSON.stringify(bms);
+  if (lineNumbersEl.dataset.key === key && lineNumbersEl.firstChild) {
+    lineNumbersEl.scrollTop = editor.scrollTop;
+    return;
+  }
+  lineNumbersEl.dataset.key = key;
   const parts = new Array(count);
   for (let i = 0; i < count; i++) {
     const bm = bms[i];
@@ -433,6 +447,12 @@ function updateLineNumbers() {
   }
   const html = parts.join('\n');
   lineNumbersEl.innerHTML = html;
+  // Wide enough for the biggest number (at least 3 digits), so 5- and 6-digit numbers aren't cut off.
+  const digits = Math.max(3, String(count).length);
+  if (lineNumbersEl.dataset.digits !== String(digits)) {
+    lineNumbersEl.dataset.digits = String(digits);
+    lineNumbersEl.style.width = 'calc(' + digits + 'ch + 12px)';
+  }
   lineNumbersEl.scrollTop = editor.scrollTop;
 }
 
@@ -491,16 +511,158 @@ function renderEditorOverlay() {
   editorHighlight.classList.toggle('hidden', !useOverlay);
   if (!useOverlay) {
     editorHighlight.innerHTML = '';
+    resetOverlayLines();
     return;
   }
-  let html = info.hljs ? highlightCode(text, info.hljs) : escapeHtml(text);
+  const html = info.hljs ? highlightCode(text, info.hljs) : escapeHtml(text);
   const urls = hasUrl ? urlRanges(text) : [];
   const lists = urls.length ? [...decos, urls] : decos;
-  if (wantSpell || lists.length) html = decorateOverlay(html, lists, wantSpell, urls);
-  if (hasIndent) html = addIndentGuides(html);
-  // A trailing newline makes the textarea show an extra empty line; give the <pre> one too.
-  editorHighlight.innerHTML = html + (text.endsWith('\n') ? ' ' : '');
+  const kept = doc.overlayStash;
+  if (kept) {
+    // Back on this tab: start from the layer kept for it (only changed lines are redone).
+    doc.overlayStash = null;
+    if (kept.text === text) {
+      editorHighlight.replaceChildren(kept.frag);
+      overlayState = kept.state;
+    }
+  }
+  patchOverlayLines(doc, text, splitHtmlLines(html), lists, urls, wantSpell, hasIndent);
   editorHighlight.scrollTop = editor.scrollTop;
+}
+
+/* ---------- the colour layer, line by line ----------
+ * The coloured layer is one <span class="ovl"> per line. Each keystroke still colours the whole
+ * text (the grammar needs it), but only lines whose result changed are decorated (spelling, links,
+ * find hits, indent guides) and replaced in the page, so a 100 KB file no longer rebuilds
+ * thousands of elements on every key. The text and layout are exactly what they were before. */
+
+let overlayState = null; // { gen, keys, unchecked, spellGen }
+let overlaySpellGen = 0; // bumps when spelling answers arrive (lines with unchecked words redo)
+let overlayUnknownWords = 0; // counts words looked up that the spellchecker has not answered yet
+
+function resetOverlayLines() {
+  overlayState = null;
+}
+
+/** Splits highlighted HTML into one balanced HTML string per line (spans closed and reopened at line ends). */
+function splitHtmlLines(html) {
+  const lines = [];
+  const open = [];
+  let start = 0;
+  let prefix = '';
+  const re = /<span[^>]*>|<\/span>|\n/g;
+  let m;
+  while ((m = re.exec(html))) {
+    if (m[0] === '\n') {
+      lines.push(prefix + html.slice(start, m.index) + '</span>'.repeat(open.length));
+      prefix = open.join('');
+      start = m.index + 1;
+    } else if (m[0] === '</span>') open.pop();
+    else open.push(m[0]);
+  }
+  lines.push(prefix + html.slice(start) + '</span>'.repeat(open.length));
+  return lines;
+}
+
+function patchOverlayLines(doc, text, lines, lists, urls, wantSpell, hasIndent) {
+  const n = lines.length;
+  // Decorations (find hits, bookmarks, links...) that fall on each line, relative to its start.
+  const ptr = lists.map(() => 0);
+  const urlIdx = lists.indexOf(urls);
+  const keys = new Array(n);
+  const locals = new Array(n);
+  let lineStart = 0;
+  for (let i = 0; i < n; i++) {
+    const nl = text.indexOf('\n', lineStart);
+    const lineEnd = nl === -1 ? text.length : nl;
+    let local = null;
+    for (let li = 0; li < lists.length; li++) {
+      const list = lists[li];
+      while (ptr[li] < list.length && list[ptr[li]].e <= lineStart) ptr[li]++;
+      for (let k = ptr[li]; k < list.length && list[k].s < lineEnd; k++) {
+        const d = list[k];
+        const s = Math.max(d.s, lineStart) - lineStart;
+        const e = Math.min(d.e, lineEnd) - lineStart;
+        if (e <= s) continue;
+        if (!local) local = lists.map(() => []);
+        local[li].push({ s, e, cls: d.cls, url: d.url });
+      }
+    }
+    locals[i] = local;
+    keys[i] = local ? lines[i] + '\u0001' + JSON.stringify(local) : lines[i];
+    lineStart = lineEnd + 1;
+  }
+
+  // Anything that changes every line's decoration starts the layer afresh.
+  const gen = [doc.id, wantSpell, spell.lang, spell.userWords.size, spell.ignored.size, hasIndent && (settings.tabSize || 4)].join('|');
+  const kids = editorHighlight.children;
+  const prev = overlayState && overlayState.gen === gen && kids.length === overlayState.keys.length ? overlayState : null;
+  const oldKeys = prev ? prev.keys : [];
+  const m = oldKeys.length;
+  // A kept line is one with the same text and decorations, unless it had words still being checked.
+  const keep = (i, j) => oldKeys[j] === keys[i] && !(prev.unchecked[j] && prev.spellGen !== overlaySpellGen);
+  let p = 0;
+  let s = 0;
+  if (prev) {
+    const max = Math.min(n, m);
+    while (p < max && keep(p, p)) p++;
+    while (s < max - p && keep(n - 1 - s, m - 1 - s)) s++;
+  }
+
+  const unchecked = new Array(n);
+  const html = [];
+  for (let i = p; i < n - s; i++) {
+    let h = lines[i];
+    const hits = overlayUnknownWords;
+    if (wantSpell || locals[i]) {
+      const loc = locals[i] ? locals[i].filter((l) => l.length) : [];
+      h = decorateOverlay(h, loc, wantSpell, locals[i] && urlIdx >= 0 ? locals[i][urlIdx] : []);
+    }
+    unchecked[i] = overlayUnknownWords !== hits;
+    if (hasIndent) h = addIndentGuides(h);
+    html.push('<span class="ovl">' + h + '</span>');
+  }
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html.join('');
+  // Each line ends with its own "\n" text node (the last line: " " after a trailing newline, like before).
+  for (const el of tpl.content.children) el.appendChild(overlayLineEnd('\n'));
+  if (prev) {
+    for (let i = 0; i < p; i++) unchecked[i] = prev.unchecked[i];
+    for (let k = 1; k <= s; k++) unchecked[n - k] = prev.unchecked[m - k];
+    for (let k = m - s - p; k > 0; k--) kids[p].remove();
+    editorHighlight.insertBefore(tpl.content, kids[p] || null);
+  } else {
+    editorHighlight.replaceChildren(tpl.content);
+  }
+  // Only a kept line that used to be the last one, and the new last line, can have the wrong
+  // ending after lines were added or removed.
+  if (p > 0 && p - 1 < n - 1) setOverlayLineEnd(kids[p - 1], '\n');
+  if (kids.length >= 2) setOverlayLineEnd(kids[kids.length - 2], '\n');
+  if (kids.length) setOverlayLineEnd(kids[kids.length - 1], text.endsWith('\n') ? ' ' : '');
+  overlayState = { gen, keys, unchecked, spellGen: overlaySpellGen };
+}
+
+function overlayLineEnd(t) {
+  const node = document.createTextNode(t);
+  node.__eol = true;
+  return node;
+}
+
+function setOverlayLineEnd(el, want) {
+  const tail = el.lastChild;
+  const cur = tail && tail.__eol ? tail : null;
+  if (cur && cur.nodeValue === want) return;
+  if (cur) cur.remove();
+  if (want) el.appendChild(overlayLineEnd(want));
+}
+
+/** Absolute text offset of a spelling span in the coloured layer (its data-o is relative to its line). */
+function overlayOffsetOf(span) {
+  const line = span.closest('.ovl');
+  const doc = getActive();
+  if (!line || !doc) return Number(span.dataset.o);
+  const idx = Array.prototype.indexOf.call(editorHighlight.children, line);
+  return lineIndex(doc).starts[idx] + Number(span.dataset.o);
 }
 
 /* ---------- indent guides and links in the editor ---------- */
@@ -868,6 +1030,7 @@ function onSpellMessage(e) {
       spell.cache.set(w, ok);
       spell.inflight.delete(w);
     }
+    overlaySpellGen++;
     refreshSpellEverywhere();
   } else if (m.type === 'error') {
     console.error('Spellcheck error:', m.message);
@@ -905,6 +1068,7 @@ function isMisspelled(raw) {
   if (spell.userWords.has(lower) || spell.ignored.has(lower)) return false;
   const known = spell.cache.get(w);
   if (known === undefined) {
+    overlayUnknownWords++;
     spell.pending.add(w);
     scheduleSpellRequest();
     return false;
@@ -1241,9 +1405,19 @@ function renderPreview(doc) {
   const mode = langInfo(doc).render;
   preview.classList.toggle('code-view', mode === 'code');
   preview.classList.toggle('bb-view', mode === 'bbcode');
+  // Back on a tab whose text hasn't changed since it was shown: reuse the preview kept for it.
+  const kept = doc.previewStash;
+  doc.previewStash = null;
+  if (kept && kept.content === doc.content && kept.path === doc.path && kept.render === mode && kept.gen === stashRenderGen) {
+    preview.setAttribute('contenteditable', mode === 'markdown' ? 'true' : 'false');
+    preview.replaceChildren(kept.frag);
+    schedulePreviewSpell(0);
+    if (typeof refreshPreviewFindHighlights === 'function') refreshPreviewFindHighlights(false);
+    return;
+  }
   if (mode === 'markdown') {
     preview.setAttribute('contenteditable', 'true');
-    preview.innerHTML = marked_.parse(doc.content);
+    setSanitizedHtml(preview, marked_.parse(doc.content), true);
     markBareLinks();
     fixPreviewImages(doc);
     enableCheckboxes();
@@ -1269,14 +1443,56 @@ function renderPreviewIfVisible(doc, typing) {
     previewStale = true;
     return;
   }
-  // A big file's preview takes a second or more to build: while typing, wait for a pause.
-  if (typing && doc.content.length > HIGHLIGHT_MAX_CHARS) {
+  // A bigger file's preview takes a while to build: while typing, wait for a short pause
+  // (a second or more for big files) instead of rebuilding it on every key.
+  if (typing && doc.content.length > PREVIEW_PAUSE_CHARS) {
     largePreviewTimer = setTimeout(() => {
       if (doc.id === activeId && previewVisible()) renderPreview(doc);
-    }, 700);
+    }, doc.content.length > HIGHLIGHT_MAX_CHARS ? 700 : 250);
     return;
   }
   renderPreview(doc);
+}
+
+const PREVIEW_PAUSE_CHARS = 50000;
+
+/* Tab switching: the preview and coloured editor layer of a tab you leave are kept (for the last
+ * few bigger tabs) and put back when you return, if the text hasn't changed, instead of being
+ * rebuilt from scratch. */
+const STASH_MIN_CHARS = 20000;
+const STASH_MAX_TABS = 3;
+const STASH_MAX_CHARS = 1500000; // a bigger tab's preview takes too much memory to keep
+const STASH_MAX_TOTAL = 2000000;
+let stashRenderGen = 0; // bumped when settings change how previews look: kept previews are dropped
+const stashOrder = [];
+
+function stashPanes(doc) {
+  if (!doc) return;
+  doc.previewStash = null;
+  doc.overlayStash = null;
+  const i = stashOrder.indexOf(doc);
+  if (i >= 0) stashOrder.splice(i, 1);
+  if (doc.content.length < STASH_MIN_CHARS || doc.content.length > STASH_MAX_CHARS || !docs.includes(doc)) return;
+  if (!previewStale && previewVisible() && preview.firstChild) {
+    const frag = document.createDocumentFragment();
+    while (preview.firstChild) frag.appendChild(preview.firstChild);
+    doc.previewStash = { content: doc.content, path: doc.path, render: langInfo(doc).render, gen: stashRenderGen, frag };
+  }
+  if (overlayState && editor.value === doc.content && editorHighlight.firstChild && editor.classList.contains('hl-active')) {
+    const frag = document.createDocumentFragment();
+    while (editorHighlight.firstChild) frag.appendChild(editorHighlight.firstChild);
+    doc.overlayStash = { text: doc.content, state: overlayState, frag };
+    overlayState = null;
+  }
+  if (!doc.previewStash && !doc.overlayStash) return;
+  stashOrder.push(doc);
+  // Keep memory in check: at most a few tabs, and not too much text in total.
+  const total = () => stashOrder.reduce((n, d) => n + d.content.length, 0);
+  while (stashOrder.length > STASH_MAX_TABS || (stashOrder.length > 1 && total() > STASH_MAX_TOTAL)) {
+    const old = stashOrder.shift();
+    old.previewStash = null;
+    old.overlayStash = null;
+  }
 }
 
 function syncFromEditor() {
@@ -1743,6 +1959,7 @@ function togglePin(id) {
 function setActiveTab(id) {
   if (id === activeId) return;
   saveDocView(getActive());
+  stashPanes(getActive());
   activeId = id;
   findState.navLine = null;
   renderTabs();
@@ -1763,6 +1980,7 @@ function cycleTab(dir) {
 
 function addDocAndActivate(doc) {
   saveDocView(getActive());
+  stashPanes(getActive());
   docs.push(doc);
   sortPinnedFirst();
   activeId = doc.id;
@@ -1863,12 +2081,14 @@ async function saveSessionNow() {
   clearTimeout(sessionTimer);
   sessionTimer = 0;
   if (!sessionReady) return;
-  try {
-    await invoke('cmd_session_save', { json: buildSession() });
-  } catch (e) {
-    console.error('Session save failed', e);
-  }
+  // Saves run one after another (each writes off the UI thread), so an older session can never
+  // land after a newer one.
+  const json = buildSession();
+  const run = sessionSaveChain.then(() => invoke('cmd_session_save', { json })).catch((e) => console.error('Session save failed', e));
+  sessionSaveChain = run;
+  return run;
 }
+let sessionSaveChain = Promise.resolve();
 
 async function loadSessionFile() {
   try {
@@ -2079,18 +2299,32 @@ async function saveDocGeneric(doc, forcePrompt) {
     if (!path) return false;
   }
   // Changed by another program since it was opened? Ask before overwriting it.
-  if (!(await confirmOverwriteIfChanged(doc, path))) return false;
+  const check = await confirmOverwriteIfChanged(doc, path);
+  if (!check) return false;
   const out = doc.eol === 'crlf' ? doc.content.replace(/\n/g, '\r\n') : doc.content;
   let st = null;
   doc.saving = true; // the disk watcher must not mistake our own write for someone else's
   try {
-    st = await invoke('cmd_write_file', { path, content: out, encoding: doc.encoding });
+    try {
+      st = await invoke('cmd_write_file', { path, content: out, encoding: doc.encoding, expect: check.expect });
+    } catch (err) {
+      // Another program changed the file in the moment between our check and the write.
+      if (String(err) !== 'CHANGED_ON_DISK') throw err;
+      if (!(await askOverwriteChanged(doc))) {
+        doc.saving = false;
+        return false;
+      }
+      st = await invoke('cmd_write_file', { path, content: out, encoding: doc.encoding, expect: null });
+    }
   } catch (err) {
     doc.saving = false;
-    await dialogApi.message('Could not save "' + basename(path) + '":\n' + err, { title: 'Save', kind: 'error' });
+    await dialogApi.message('Could not save "' + basename(path) + '":\n' + err + '\n\nThe file on disk was not changed.', { title: 'Save', kind: 'error' });
     return false;
   }
   doc.saving = false;
+  // ANSI can't hold some characters now in the text, so it was saved as UTF-8 instead.
+  const switchedToUtf8 = !!(st && st.encoding && st.encoding !== doc.encoding && doc.encoding === 'latin1');
+  if (st && st.encoding) doc.encoding = st.encoding;
   const langChanged = doc.path !== path && !doc.langOverride && langForPath(path) !== doc.lang;
   const newPath = !doc.path || !samePath(doc.path, path);
   doc.path = path;
@@ -2106,6 +2340,7 @@ async function saveDocGeneric(doc, forcePrompt) {
   renderTabs();
   if (langChanged && doc.id === activeId) loadActiveDocIntoPanes();
   updateStatusBar();
+  if (switchedToUtf8 && doc.id === activeId) flashFindStatus('Saved as UTF-8: the text has characters that ANSI (Windows-1252) cannot store.');
   scheduleSessionSave();
   return true;
 }
@@ -2561,7 +2796,7 @@ function wireDomEvents() {
     );
     if (!span) return;
     e.preventDefault();
-    const start = Number(span.dataset.o);
+    const start = overlayOffsetOf(span);
     const word = span.dataset.w;
     showSpellMenu(e.clientX, e.clientY, word, (s) => replaceEditorRange(start, start + word.length, s));
   });

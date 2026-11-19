@@ -39,6 +39,8 @@ pub fn cmd_app_info() -> Result<AppInfo, String> {
 /// process may still be exiting (its exe stays locked until then), so keep trying for a while.
 pub fn cleanup_after_update() {
     if let Ok(exe) = std::env::current_exe() {
+        // A download left over from an update that was interrupted (e.g. the PC lost power).
+        let _ = std::fs::remove_file(exe.with_extension("exe.download"));
         let old = exe.with_extension("old");
         if !old.exists() {
             return;
@@ -120,18 +122,72 @@ pub fn cmd_register_file_types(exts: Vec<String>) -> Result<usize, String> {
     Ok(n)
 }
 
+/// The exe a registry command such as `"C:\Apps\notepad-md.exe" "%1"` points at.
+fn command_exe(cmd: &str) -> Option<String> {
+    let rest = cmd.trim().strip_prefix('"')?;
+    Some(rest[..rest.find('"')?].to_string())
+}
+
+/// Which copy of Notepad MD a registry command belongs to, compared with this exe.
+#[derive(Debug, PartialEq)]
+enum Owner {
+    /// Missing, or points at this exe.
+    Us,
+    /// Points at an exe that no longer exists (a moved or deleted copy): safe to clean up.
+    Stale,
+    /// Points at another copy that still exists: leave it alone.
+    Other(String),
+}
+
+fn owner_of(cmd: Option<String>, exe: &str) -> Owner {
+    let Some(cmd) = cmd else { return Owner::Us };
+    match command_exe(&cmd) {
+        Some(p) if p.eq_ignore_ascii_case(exe) => Owner::Us,
+        Some(p) if std::path::Path::new(&p).is_file() => Owner::Other(p),
+        _ => Owner::Stale,
+    }
+}
+
+fn read_command(root: &RegKey, key: &str) -> Option<String> {
+    root.open_subkey(format!("{}\\command", key)).ok().and_then(|k| k.get_value("").ok())
+}
+
+/// Deletes a key tree; a key that is already gone is fine (so unregistering twice is harmless).
+fn delete_tree(root: &RegKey, key: &str) -> Result<(), String> {
+    match root.delete_subkey_all(key) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("Could not remove {}: {}", key, e)),
+    }
+}
+
+/// Removes this copy's "Open with" entries. Entries that belong to another copy of Notepad MD
+/// that still exists (a second portable copy) are left alone and reported; entries left by a copy
+/// that was moved or deleted are cleaned up. The extensions' own default programs are never touched.
 #[tauri::command]
 pub fn cmd_unregister_file_types(exts: Vec<String>) -> Result<(), String> {
     let exe = exe_path()?;
+    let exe_s = exe.to_string_lossy().to_string();
     let root = classes_root()?;
-    let _ = root.delete_subkey_all(PROG_ID);
-    let _ = root.delete_subkey_all(format!("Applications\\{}", exe_file_name(&exe)));
+    let app_key = format!("Applications\\{}", exe_file_name(&exe));
+    if !matches!(owner_of(read_command(&root, &format!("{}\\shell\\open", app_key)), &exe_s), Owner::Other(_)) {
+        delete_tree(&root, &app_key)?;
+    }
+    if let Owner::Other(p) = owner_of(read_command(&root, &format!("{}\\shell\\open", PROG_ID)), &exe_s) {
+        notify_assoc_changed();
+        return Err(format!("The file types are registered to another copy of Notepad MD:\n{}\n\nUnregister them from that copy.", p));
+    }
+    delete_tree(&root, PROG_ID)?;
     for ext in exts.iter().map(|e| e.trim_start_matches('.').to_ascii_lowercase()) {
         if !valid_ext(&ext) {
             continue;
         }
         if let Ok(k) = root.open_subkey_with_flags(format!(".{}\\OpenWithProgids", ext), KEY_ALL_ACCESS) {
-            let _ = k.delete_value(PROG_ID);
+            match k.delete_value(PROG_ID) {
+                Ok(()) => {}
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                Err(e) => return Err(format!("Could not update .{}: {}", ext, e)),
+            }
         }
     }
     notify_assoc_changed();
@@ -176,7 +232,11 @@ pub fn cmd_set_context_menu(enabled: bool) -> Result<(), String> {
         err(verb.set_value("Icon", &format!("\"{}\",0", exe)))?;
         err(err(verb.create_subkey("command"))?.0.set_value("", &open_command(&exe)))?;
     } else {
-        let _ = root.delete_subkey_all(CONTEXT_VERB);
+        let exe = exe_path()?.to_string_lossy().to_string();
+        if let Owner::Other(p) = owner_of(read_command(&root, CONTEXT_VERB), &exe) {
+            return Err(format!("The Explorer menu item belongs to another copy of Notepad MD:\n{}\n\nTurn it off from that copy.", p));
+        }
+        delete_tree(&root, CONTEXT_VERB)?;
     }
     notify_assoc_changed();
     Ok(())
@@ -196,6 +256,40 @@ pub fn cmd_context_menu_status() -> Result<String, String> {
         None => "off",
     }
     .into())
+}
+
+#[derive(serde::Serialize)]
+pub struct AccentColors {
+    /// For light mode (Windows' darker accent shade, readable on white).
+    light: String,
+    /// For dark mode (Windows' lighter accent shade, readable on dark grey).
+    dark: String,
+}
+
+fn rgb_hex(r: u8, g: u8, b: u8) -> String {
+    format!("#{:02x}{:02x}{:02x}", r, g, b)
+}
+
+/// The Windows accent colour, as the shades Windows itself uses for text and controls in light
+/// and dark mode (from the accent palette), or None if it can't be read.
+#[tauri::command]
+pub fn cmd_system_accent() -> Option<AccentColors> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok(k) = hkcu.open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Accent") {
+        if let Ok(v) = k.get_raw_value("AccentPalette") {
+            // 8 colours of 4 bytes (R, G, B, A): light 3, light 2, light 1, base, dark 1, dark 2, dark 3, -
+            let b = &v.bytes;
+            if b.len() >= 32 {
+                let c = |i: usize| rgb_hex(b[i * 4], b[i * 4 + 1], b[i * 4 + 2]);
+                return Some(AccentColors { light: c(4), dark: c(1) });
+            }
+        }
+    }
+    // Older Windows: the single accent colour (stored as 0xAABBGGRR).
+    let dwm = hkcu.open_subkey("Software\\Microsoft\\Windows\\DWM").ok()?;
+    let v: u32 = dwm.get_value("AccentColor").ok()?;
+    let c = rgb_hex((v & 0xff) as u8, ((v >> 8) & 0xff) as u8, ((v >> 16) & 0xff) as u8);
+    Some(AccentColors { light: c.clone(), dark: c })
 }
 
 #[tauri::command]
@@ -251,8 +345,14 @@ fn sha256_file(path: &str) -> Result<String, String> {
         .ok_or_else(|| "Could not check the download's checksum.".to_string())
 }
 
-fn update_api() -> String {
-    std::env::var("NOTEPADMD_UPDATE_URL").unwrap_or_else(|_| UPDATE_API.into())
+/// Only release files from this repository are ever downloaded as an update.
+const TRUSTED_ASSET_PREFIX: &str = "https://github.com/mccabedd/notepad-md/releases/download/";
+
+/// Tests point the updater at a local release file (file:///...) with NOTEPADMD_UPDATE_URL.
+/// Only local file: addresses are accepted there, so the variable can't redirect updates to the
+/// internet; in test mode the asset may also be a local file.
+fn test_release_url() -> Option<String> {
+    std::env::var("NOTEPADMD_UPDATE_URL").ok().filter(|u| u.starts_with("file:///"))
 }
 
 fn parse_version(s: &str) -> Vec<u64> {
@@ -274,6 +374,48 @@ fn is_newer(latest: &str, current: &str) -> bool {
     false
 }
 
+/// The latest release as GitHub describes it.
+struct Release {
+    tag: String,
+    page_url: String,
+    notes: String,
+    asset_name: Option<String>,
+    asset_url: Option<String>,
+    asset_size: Option<u64>,
+    digest: Option<String>,
+}
+
+fn fetch_release() -> Result<Release, String> {
+    let url = test_release_url().unwrap_or_else(|| UPDATE_API.into());
+    let body = curl(&["-sSL", "--fail", "--proto", "=https,file", "--max-time", "20", "-H", USER_AGENT, "-H", "Accept: application/vnd.github+json", &url])?;
+    let v: serde_json::Value = serde_json::from_slice(&body).map_err(|_| "GitHub sent an unexpected reply.".to_string())?;
+    let tag = v["tag_name"].as_str().unwrap_or("").to_string();
+    if tag.is_empty() {
+        return Err("No release has been published on GitHub yet.".into());
+    }
+    let assets = v["assets"].as_array().cloned().unwrap_or_default();
+    let exe_asset = assets.iter().find(|a| a["name"].as_str().map(|n| n.to_ascii_lowercase().ends_with(".exe")).unwrap_or(false));
+    Ok(Release {
+        tag,
+        page_url: v["html_url"].as_str().unwrap_or("").to_string(),
+        notes: v["body"].as_str().unwrap_or("").chars().take(1500).collect(),
+        asset_name: exe_asset.and_then(|a| a["name"].as_str().map(String::from)),
+        asset_url: exe_asset.and_then(|a| a["browser_download_url"].as_str().map(String::from)),
+        asset_size: exe_asset.and_then(|a| a["size"].as_u64()),
+        digest: exe_asset.and_then(|a| a["digest"].as_str().map(String::from)),
+    })
+}
+
+/// The SHA-256 GitHub computed for the uploaded file ("sha256:<64 hex>"), or None if missing or malformed.
+fn sha256_of_digest(digest: Option<&str>) -> Option<String> {
+    let hex = digest?.trim().strip_prefix("sha256:")?;
+    (hex.len() == 64 && hex.chars().all(|c| c.is_ascii_hexdigit())).then(|| hex.to_ascii_lowercase())
+}
+
+fn asset_url_trusted(url: &str, test_mode: bool) -> bool {
+    url.starts_with(TRUSTED_ASSET_PREFIX) && !url.contains("..") || (test_mode && url.starts_with("file:///"))
+}
+
 #[derive(serde::Serialize)]
 pub struct UpdateInfo {
     current: String,
@@ -289,74 +431,106 @@ pub struct UpdateInfo {
 
 #[tauri::command]
 pub async fn cmd_check_update() -> Result<UpdateInfo, String> {
-    let url = update_api();
-    let body = curl(&["-sSL", "--fail", "--max-time", "20", "-H", USER_AGENT, "-H", "Accept: application/vnd.github+json", &url])?;
-    let v: serde_json::Value = serde_json::from_slice(&body).map_err(|_| "GitHub sent an unexpected reply.".to_string())?;
-    let tag = v["tag_name"].as_str().unwrap_or("").to_string();
-    if tag.is_empty() {
-        return Err("No release has been published on GitHub yet.".into());
-    }
+    let r = fetch_release()?;
     let current = env!("CARGO_PKG_VERSION").to_string();
-    let assets = v["assets"].as_array().cloned().unwrap_or_default();
-    let exe_asset = assets.iter().find(|a| a["name"].as_str().map(|n| n.to_ascii_lowercase().ends_with(".exe")).unwrap_or(false));
     Ok(UpdateInfo {
-        newer: is_newer(&tag, &current),
-        latest: tag.trim_start_matches(['v', 'V']).to_string(),
+        newer: is_newer(&r.tag, &current),
+        latest: r.tag.trim_start_matches(['v', 'V']).to_string(),
         current,
-        page_url: v["html_url"].as_str().unwrap_or("").to_string(),
-        notes: v["body"].as_str().unwrap_or("").chars().take(1500).collect(),
-        asset_name: exe_asset.and_then(|a| a["name"].as_str().map(String::from)),
-        asset_url: exe_asset.and_then(|a| a["browser_download_url"].as_str().map(String::from)),
-        asset_size: exe_asset.and_then(|a| a["size"].as_u64()),
-        digest: exe_asset.and_then(|a| a["digest"].as_str().map(String::from)),
+        page_url: r.page_url,
+        notes: r.notes,
+        asset_name: r.asset_name,
+        asset_url: r.asset_url,
+        asset_size: r.asset_size,
+        digest: r.digest,
     })
+}
+
+/// Removes a file, ignoring "not found".
+fn remove_quietly(p: &std::path::Path) {
+    let _ = std::fs::remove_file(p);
 }
 
 /// Downloads the new exe, verifies it, swaps it in for the running one (a running exe can be
 /// renamed on Windows, just not overwritten), starts it and exits. The page saves the session
 /// first, so the new version reopens every tab.
+///
+/// Safety rules:
+/// - The release is looked up again here; nothing the page passes is trusted as a download address.
+/// - Only files from this repository's GitHub releases are accepted.
+/// - The release must carry GitHub's SHA-256 for the file, and the download must match it and its
+///   size; a missing or malformed checksum stops the update.
+/// - The download is staged and verified next to the exe before anything is replaced, and every
+///   failure puts the previous version back, so the app is never left without a working exe.
 #[tauri::command]
-pub async fn cmd_install_update(app: tauri::AppHandle, asset_url: String, digest: Option<String>, size: Option<u64>) -> Result<(), String> {
-    let test_mode = std::env::var("NOTEPADMD_UPDATE_URL").is_ok();
-    if !(asset_url.starts_with("https://") || (test_mode && asset_url.starts_with("file:"))) {
-        return Err("Refusing to download an update from a non-https address.".into());
+pub async fn cmd_install_update(app: tauri::AppHandle, version: Option<String>) -> Result<(), String> {
+    let test_mode = test_release_url().is_some();
+    let r = fetch_release()?;
+    let current = env!("CARGO_PKG_VERSION");
+    if !is_newer(&r.tag, current) {
+        return Err("There is no newer version to install.".into());
     }
-    let dir = std::env::temp_dir().join("notepadmd-update");
-    err(std::fs::create_dir_all(&dir))?;
-    let tmp = dir.join("NotepadMD-update.exe");
-    let _ = std::fs::remove_file(&tmp);
-    let tmp_s = tmp.to_string_lossy().to_string();
-    curl(&["-sSL", "--fail", "--max-time", "600", "-H", USER_AGENT, "-o", &tmp_s, &asset_url])?;
-
-    let bytes = err(std::fs::read(&tmp))?;
-    if bytes.len() < 500_000 || !bytes.starts_with(b"MZ") {
-        return Err("The download is not a valid Windows program.".into());
-    }
-    if let Some(expected) = size {
-        if bytes.len() as u64 != expected {
-            return Err("The download is incomplete (size does not match the release).".into());
+    if let Some(v) = &version {
+        if parse_version(v) != parse_version(&r.tag) {
+            return Err("The release changed while you were deciding. Check for updates again.".into());
         }
     }
-    if let Some(hex) = digest.as_deref().and_then(|d| d.strip_prefix("sha256:")) {
-        let actual = sha256_file(&tmp_s)?;
-        if !actual.eq_ignore_ascii_case(hex) {
-            return Err("The download failed its checksum test, so it was not installed.".into());
-        }
+    let asset_url = r.asset_url.ok_or("This release has no Windows download attached.")?;
+    if !asset_url_trusted(&asset_url, test_mode) {
+        return Err("Refusing to download an update from outside the Notepad MD releases on GitHub.".into());
     }
+    let expected_hash = sha256_of_digest(r.digest.as_deref())
+        .ok_or("This release has no checksum to verify the download against, so it was not installed. Download it from the releases page instead.")?;
+    let expected_size = r.asset_size.ok_or("This release does not state the download's size, so it was not installed.")?;
 
     let exe = exe_path()?;
+    let staged = exe.with_extension("exe.download");
     let old = exe.with_extension("old");
-    let _ = std::fs::remove_file(&old);
-    std::fs::rename(&exe, &old).map_err(|e| {
-        format!("Could not replace {} ({}). The new version was downloaded to {}.", exe.display(), e, tmp.display())
-    })?;
-    if std::fs::rename(&tmp, &exe).is_err() {
-        if let Err(e) = std::fs::copy(&tmp, &exe) {
-            let _ = std::fs::rename(&old, &exe); // put the running version back
-            return Err(format!("Could not install the update: {}", e));
+    remove_quietly(&staged);
+    let staged_s = staged.to_string_lossy().to_string();
+    let protos = if test_mode { "=https,file" } else { "=https" };
+    if let Err(e) = curl(&["-sSL", "--fail", "--proto", protos, "--proto-redir", "=https", "--max-time", "600", "-H", USER_AGENT, "-o", &staged_s, &asset_url]) {
+        remove_quietly(&staged);
+        if !exe.parent().map(|d| d.exists()).unwrap_or(false) || std::fs::metadata(exe.parent().unwrap()).map(|m| m.permissions().readonly()).unwrap_or(false) {
+            return Err(format!("Could not write to {}. Move Notepad MD to a folder you can change, or download the update from the releases page.", exe.parent().unwrap().display()));
         }
+        return Err(e);
     }
-    err(Command::new(&exe).arg("--after-update").spawn()).map_err(|e| format!("Updated, but could not restart: {}", e))?;
+    let verify = || -> Result<(), String> {
+        let bytes = err(std::fs::read(&staged))?;
+        if bytes.len() < 500_000 || !bytes.starts_with(b"MZ") {
+            return Err("The download is not a valid Windows program.".into());
+        }
+        if bytes.len() as u64 != expected_size {
+            return Err("The download is incomplete (size does not match the release).".into());
+        }
+        if !sha256_file(&staged_s)?.eq_ignore_ascii_case(&expected_hash) {
+            return Err("The download failed its checksum test, so it was not installed.".into());
+        }
+        Ok(())
+    };
+    if let Err(e) = verify() {
+        remove_quietly(&staged);
+        return Err(e);
+    }
+
+    // Swap: running exe -> .old, verified download -> exe. Undo on any failure.
+    remove_quietly(&old);
+    if let Err(e) = std::fs::rename(&exe, &old) {
+        remove_quietly(&staged);
+        return Err(format!("Could not replace {} ({}). Nothing was changed.", exe.display(), e));
+    }
+    if let Err(e) = std::fs::rename(&staged, &exe) {
+        let _ = std::fs::rename(&old, &exe);
+        remove_quietly(&staged);
+        return Err(format!("Could not install the update ({}). Your current version was kept.", e));
+    }
+    if let Err(e) = Command::new(&exe).arg("--after-update").spawn() {
+        // The new exe won't start: put the previous version back.
+        remove_quietly(&exe);
+        let _ = std::fs::rename(&old, &exe);
+        return Err(format!("The new version could not start ({}). Your current version was kept.", e));
+    }
     // Give the reply a moment to reach the page, then quit; the new version takes over.
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(300));
@@ -375,5 +549,82 @@ mod tests {
         assert!(!is_newer("v1.0.0", "1.0.0"));
         assert!(!is_newer("0.9", "1.0.0"));
         assert!(is_newer("2", "1.9.9"));
+    }
+
+    #[test]
+    fn owner_of_commands() {
+        let me = "C:\\Apps\\notepad-md.exe";
+        assert_eq!(owner_of(None, me), Owner::Us);
+        assert_eq!(owner_of(Some(open_command(me)), me), Owner::Us);
+        assert_eq!(owner_of(Some(open_command("c:\\apps\\NOTEPAD-MD.EXE")), me), Owner::Us);
+        assert_eq!(owner_of(Some(open_command("C:\\Gone\\notepad-md.exe")), me), Owner::Stale);
+        let other = std::env::current_exe().unwrap().to_string_lossy().to_string();
+        assert_eq!(owner_of(Some(open_command(&other)), me), Owner::Other(other.clone()));
+        assert_eq!(command_exe("\"C:\\a b\\x.exe\" \"%1\""), Some("C:\\a b\\x.exe".into()));
+    }
+
+    /// Register/unregister against a throwaway registry key (never the real file associations).
+    #[test]
+    fn register_and_unregister_are_safe_and_idempotent() {
+        let test_root = format!("Software\\NotepadMD-UnitTest-{}", std::process::id());
+        std::env::set_var("NOTEPADMD_REG_ROOT", format!("{}\\Classes", test_root));
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let root = classes_root().unwrap();
+        // .bat already runs with Windows' own handler: that default must survive.
+        root.create_subkey(".bat").unwrap().0.set_value("", &"batfile").unwrap();
+        let exts = vec!["md".to_string(), "bat".to_string(), "bad ext".to_string()];
+
+        assert_eq!(cmd_register_file_types(exts.clone()).unwrap(), 2);
+        assert_eq!(cmd_register_file_types(exts.clone()).unwrap(), 2, "registering twice");
+        let bat = root.open_subkey(".bat").unwrap();
+        assert_eq!(bat.get_value::<String, _>("").unwrap(), "batfile");
+        assert!(root.open_subkey(".bat\\OpenWithProgids").unwrap().get_raw_value(PROG_ID).is_ok());
+
+        cmd_unregister_file_types(exts.clone()).unwrap();
+        cmd_unregister_file_types(exts.clone()).unwrap(); // twice: no error
+        assert_eq!(root.open_subkey(".bat").unwrap().get_value::<String, _>("").unwrap(), "batfile");
+        assert!(root.open_subkey(PROG_ID).is_err());
+        assert!(root.open_subkey(".md\\OpenWithProgids").unwrap().get_raw_value(PROG_ID).is_err());
+
+        // Another copy that still exists owns the registration: left alone, error explains why.
+        let other = format!("{}\\System32\\notepad.exe", std::env::var("SystemRoot").unwrap());
+        cmd_register_file_types(exts.clone()).unwrap();
+        root.open_subkey_with_flags(format!("{}\\shell\\open\\command", PROG_ID), KEY_ALL_ACCESS).unwrap().set_value("", &open_command(&other)).unwrap();
+        let e = cmd_unregister_file_types(exts.clone()).unwrap_err();
+        assert!(e.contains("another copy"), "{}", e);
+        assert!(root.open_subkey(PROG_ID).is_ok());
+        assert!(root.open_subkey(".md\\OpenWithProgids").unwrap().get_raw_value(PROG_ID).is_ok());
+
+        // ...but a copy that was moved or deleted is cleaned up.
+        root.open_subkey_with_flags(format!("{}\\shell\\open\\command", PROG_ID), KEY_ALL_ACCESS).unwrap().set_value("", &open_command("C:\\Nowhere\\notepad-md.exe")).unwrap();
+        cmd_unregister_file_types(exts).unwrap();
+        assert!(root.open_subkey(PROG_ID).is_err());
+
+        drop(root);
+        hkcu.delete_subkey_all(&test_root).unwrap();
+    }
+
+    #[test]
+    fn checksum_must_be_present_and_well_formed() {
+        let good = format!("sha256:{}", "A".repeat(64));
+        assert_eq!(sha256_of_digest(Some(&good)), Some("a".repeat(64)));
+        assert_eq!(sha256_of_digest(None), None);
+        assert_eq!(sha256_of_digest(Some("")), None);
+        assert_eq!(sha256_of_digest(Some(&"a".repeat(64))), None, "no sha256: prefix");
+        assert_eq!(sha256_of_digest(Some(&format!("sha256:{}", "a".repeat(63)))), None, "too short");
+        assert_eq!(sha256_of_digest(Some(&format!("sha256:{}", "g".repeat(64)))), None, "not hex");
+        assert_eq!(sha256_of_digest(Some(&format!("md5:{}", "a".repeat(64)))), None);
+    }
+
+    #[test]
+    fn only_this_repositorys_releases_are_trusted() {
+        assert!(asset_url_trusted("https://github.com/mccabedd/notepad-md/releases/download/v1.0.8/NotepadMD-v1.0.8-win-x64.exe", false));
+        assert!(!asset_url_trusted("https://github.com/someone-else/notepad-md/releases/download/v1/x.exe", false));
+        assert!(!asset_url_trusted("https://evil.example/NotepadMD.exe", false));
+        assert!(!asset_url_trusted("http://github.com/mccabedd/notepad-md/releases/download/v1/x.exe", false));
+        assert!(!asset_url_trusted("https://github.com/mccabedd/notepad-md/releases/download/../../x/x.exe", false));
+        assert!(!asset_url_trusted("https://github.com/mccabedd/notepad-md.evil.example/releases/download/v1/x.exe", false));
+        assert!(!asset_url_trusted("file:///C:/x.exe", false), "local files only in test mode");
+        assert!(asset_url_trusted("file:///C:/x.exe", true));
     }
 }

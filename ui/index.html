@@ -187,6 +187,7 @@
         <section>
           <h3>General</h3>
           <label class="row">Theme <select data-s="theme"><option value="system">Follow Windows</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+          <label class="check"><input type="checkbox" data-s="windowsAccent" /> Use the Windows accent colour</label>
           <label class="check"><input type="checkbox" data-s="restoreSession" /> Reopen my tabs (including unsaved changes) when the app starts</label>
           <label class="check"><input type="checkbox" data-s="menuBar" /> Show menu bar <kbd>Alt</kbd></label>
           <label class="check"><input type="checkbox" data-s="toolbar" /> Show toolbar <kbd>Ctrl+T</kbd></label>
@@ -264,7 +265,7 @@
       </div>
       <div class="about-body">
         <img src="app-icon.png" alt="" width="64" height="64" />
-        <div class="about-name">NotePad-MD <span id="about-version">v1.0.7</span></div>
+        <div class="about-name">NotePad-MD <span id="about-version">v1.0.8</span></div>
         <a href="https://github.com/mccabedd/notepad-md" id="about-link">https://github.com/mccabedd/notepad-md</a>
         <div>Created by David McCabe</div>
         <button id="about-update" class="primary">Check for Updates</button>
@@ -298,6 +299,7 @@
   <script src="vendor/highlight/highlight.min.js"></script>
   <script src="vendor/highlight/powershell.min.js"></script>
   <script src="vendor/highlight/dos.min.js"></script>
+  <script src="sanitize.js"></script>
   <script src="bbcode.js"></script>
   <script src="find.js"></script>
   <script src="settings.js"></script>

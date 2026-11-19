@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod fileio;
 mod instance;
 mod linkmenu;
 mod printpdf;
@@ -25,7 +26,7 @@ struct MenuChecks(Mutex<HashMap<String, CheckMenuItem<tauri::Wry>>>);
 /// File > Recent Files (rebuilt by the page whenever the list changes).
 struct RecentMenu(Mutex<Option<Submenu<tauri::Wry>>>);
 
-#[derive(serde::Serialize, Clone, Copy)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Debug)]
 struct FileStat {
     mtime: u64,
     size: u64,
@@ -65,53 +66,6 @@ struct FileData {
     size: u64,
 }
 
-fn decode(bytes: &[u8]) -> Result<(String, &'static str), String> {
-    if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
-        return String::from_utf8(bytes[3..].to_vec())
-            .map(|s| (s, "utf8bom"))
-            .map_err(|_| "File has a UTF-8 marker but is not valid UTF-8".into());
-    }
-    if bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]) {
-        let le = bytes[0] == 0xFF;
-        let units: Vec<u16> = bytes[2..]
-            .chunks_exact(2)
-            .map(|c| if le { u16::from_le_bytes([c[0], c[1]]) } else { u16::from_be_bytes([c[0], c[1]]) })
-            .collect();
-        return String::from_utf16(&units)
-            .map(|s| (s, if le { "utf16le" } else { "utf16be" }))
-            .map_err(|_| "File is not valid UTF-16".into());
-    }
-    if bytes.contains(&0) {
-        return Err("This looks like a binary file, not text".into());
-    }
-    match String::from_utf8(bytes.to_vec()) {
-        Ok(s) => Ok((s, "utf8")),
-        // Not UTF-8: treat as Windows ANSI / Latin-1 (every byte maps to one character).
-        Err(_) => Ok((bytes.iter().map(|&b| b as char).collect(), "latin1")),
-    }
-}
-
-fn encode(content: &str, encoding: &str) -> Vec<u8> {
-    match encoding {
-        "utf8bom" => {
-            let mut v = vec![0xEF, 0xBB, 0xBF];
-            v.extend_from_slice(content.as_bytes());
-            v
-        }
-        "utf16le" | "utf16be" => {
-            let le = encoding == "utf16le";
-            let mut v = if le { vec![0xFF, 0xFE] } else { vec![0xFE, 0xFF] };
-            for u in content.encode_utf16() {
-                v.extend_from_slice(&if le { u.to_le_bytes() } else { u.to_be_bytes() });
-            }
-            v
-        }
-        // Keep Latin-1 only while every character still fits; otherwise fall back to UTF-8.
-        "latin1" if content.chars().all(|c| (c as u32) < 256) => content.chars().map(|c| c as u8).collect(),
-        _ => content.as_bytes().to_vec(),
-    }
-}
-
 fn read_file_data(path: &str) -> Result<FileData, String> {
     let meta = fs::metadata(path).map_err(|e| e.to_string())?;
     if meta.is_dir() {
@@ -121,7 +75,7 @@ fn read_file_data(path: &str) -> Result<FileData, String> {
         return Err("File is too large to open (over 100 MB)".into());
     }
     let bytes = fs::read(path).map_err(|e| e.to_string())?;
-    let (content, encoding) = decode(&bytes)?;
+    let (content, encoding) = fileio::decode(&bytes)?;
     let st = stat_of(path).unwrap_or(FileStat { mtime: 0, size: bytes.len() as u64 });
     Ok(FileData {
         path: path.to_string(),
@@ -132,26 +86,35 @@ fn read_file_data(path: &str) -> Result<FileData, String> {
     })
 }
 
-/// Write via a temp file + rename so a crash mid-write never leaves a half-written file.
-fn write_atomic(path: &PathBuf, bytes: &[u8]) -> Result<(), String> {
-    let tmp = path.with_extension("notepadmd-tmp");
-    fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
-    fs::rename(&tmp, path).map_err(|e| {
-        let _ = fs::remove_file(&tmp);
-        e.to_string()
-    })
-}
-
 #[tauri::command]
-fn cmd_read_file(path: String) -> Result<FileData, String> {
+async fn cmd_read_file(path: String) -> Result<FileData, String> {
     read_file_data(&path)
 }
 
+/// Returned when the file changed on disk between the page's check and the write.
+const CHANGED_ON_DISK: &str = "CHANGED_ON_DISK";
+
+#[derive(serde::Serialize)]
+struct SavedFile {
+    mtime: Option<u64>,
+    size: Option<u64>,
+    /// Encoding actually written (ANSI text that no longer fits in ANSI is saved as UTF-8).
+    encoding: &'static str,
+}
+
+/// Saves a document crash-safely. `expect` is the file's state when the page last checked it:
+/// if another program changed it since, nothing is written and the page asks the user again.
 #[tauri::command]
-fn cmd_write_file(path: String, content: String, encoding: Option<String>) -> Result<Option<FileStat>, String> {
-    let bytes = encode(&content, encoding.as_deref().unwrap_or("utf8"));
-    fs::write(&path, bytes).map_err(|e| e.to_string())?;
-    Ok(stat_of(&path))
+async fn cmd_write_file(path: String, content: String, encoding: Option<String>, expect: Option<FileStat>) -> Result<SavedFile, String> {
+    if let Some(e) = expect {
+        if stat_of(&path) != Some(e) {
+            return Err(CHANGED_ON_DISK.into());
+        }
+    }
+    let (bytes, used) = fileio::encode(&content, encoding.as_deref().unwrap_or("utf8"));
+    fileio::save_file(std::path::Path::new(&path), &bytes)?;
+    let st = stat_of(&path);
+    Ok(SavedFile { mtime: st.map(|s| s.mtime), size: st.map(|s| s.size), encoding: used })
 }
 
 /// Last-modified time and size of each file (None when it no longer exists).
@@ -272,9 +235,9 @@ fn cmd_session_load(app: tauri::AppHandle) -> Option<String> {
 }
 
 #[tauri::command]
-fn cmd_session_save(app: tauri::AppHandle, json: String) -> Result<(), String> {
+async fn cmd_session_save(app: tauri::AppHandle, json: String) -> Result<(), String> {
     let path = session_path(&app)?;
-    write_atomic(&path, json.as_bytes())
+    fileio::save_file(&path, json.as_bytes())
 }
 
 fn main() {
@@ -324,6 +287,7 @@ fn main() {
             system::cmd_unregister_file_types,
             system::cmd_file_types_status,
             system::cmd_open_default_apps,
+            system::cmd_system_accent,
             system::cmd_set_context_menu,
             system::cmd_context_menu_status,
             system::cmd_download_url,

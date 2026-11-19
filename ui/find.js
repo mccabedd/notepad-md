@@ -725,10 +725,32 @@ function navigateBookmarkBlock(dir) {
 }
 
 /** Keeps bookmarks (and removed rows) on the same text when lines are inserted or deleted above them. */
+/**
+ * Moves find matches along with an edit (old text [from, to) replaced, length change `delta`)
+ * until find runs again, so the highlights stay on their words and, in big files, only the
+ * edited line is redrawn. Matches touching the edit are dropped (find re-checks them shortly).
+ */
+function shiftFindMatches(from, to, delta) {
+  const cur = findState.matches[findState.index];
+  const out = [];
+  for (const m of findState.matches) {
+    if (m.e <= from) out.push(m);
+    else if (m.s >= to) {
+      m.s += delta;
+      m.e += delta;
+      out.push(m);
+    }
+  }
+  findState.matches = out;
+  const i = cur ? out.indexOf(cur) : -1;
+  findState.index = i >= 0 ? i : Math.min(findState.index, out.length - 1);
+}
+
 function adjustLineAnchors(doc, oldText, newText) {
   const hasBm = doc.bookmarks && Object.keys(doc.bookmarks).length;
   const hasRemoved = doc.removedLines && doc.removedLines.size;
-  if (!hasBm && !hasRemoved) return;
+  const hasMatches = doc.id === activeId && findState.matches.length > 0;
+  if (!hasBm && !hasRemoved && !hasMatches) return;
   let p = 0;
   const min = Math.min(oldText.length, newText.length);
   while (p < min && oldText.charCodeAt(p) === newText.charCodeAt(p)) p++;
@@ -738,6 +760,8 @@ function adjustLineAnchors(doc, oldText, newText) {
     so--;
     sn--;
   }
+  if (hasMatches) shiftFindMatches(p, so, sn - so);
+  if (!hasBm && !hasRemoved) return;
   const countNl = (t, a, b) => {
     let n = 0;
     for (let i = a; i < b; i++) if (t.charCodeAt(i) === 10) n++;

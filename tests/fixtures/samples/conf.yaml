@@ -1,0 +1,6 @@
+# comment
+name: test
+items:
+  - one
+  - 2
+enabled: true

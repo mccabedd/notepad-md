@@ -183,7 +183,10 @@ Typo = function (dictionary, affData, wordsData, settings) {
 				}
 			}
 			
-			self.compoundRules[i] = new RegExp(expressionText, "i");
+			// Notepad MD fix: anchored, so the rule must match the whole word. Unanchored, any
+			// word merely containing e.g. "02nd" counted as correct, and suggestions like
+			// "Un02ndled" were offered for "Unhndled".
+			self.compoundRules[i] = new RegExp("^" + expressionText + "$", "i");
 		}
 		
 		self.loaded = true;
