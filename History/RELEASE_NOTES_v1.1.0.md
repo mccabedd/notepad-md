@@ -4,7 +4,7 @@
 |---|---|
 | **Tag** | `v1.1.0` |
 | **Target** | `main` |
-| **Release title** | `Notepad MD v1.1.0` |
+| **Release title** | `NotePad-MD v1.1.0` |
 | **Binary to attach** | `src-tauri\target\release\NotepadMD-v1.1.0-win-x64.exe` (4.17 MB) |
 | **Set as the latest release** | ✔ |
 
@@ -12,9 +12,9 @@ Everything below the line is the release description.
 
 ---
 
-## Notepad MD v1.1.0
+## NotePad-MD v1.1.0
 
-If you have an earlier version, open **About → About Notepad MD → Check for Updates** to install this one. It reopens with all your tabs.
+If you have an earlier version, open **About → About NotePad-MD → Check for Updates** to install this one. It reopens with all your tabs.
 
 ### Fixed
 - **A new tab is ready to type into straight away.** Before, typing after opening a new tab could go nowhere, or into the tab you were in before.
@@ -39,4 +39,4 @@ The notes for each version are in the [History folder](https://github.com/mccabe
 - **SHA-256:** `6CEF0594D616D0805B191F6DFC5C8586D263455E84F02389B38F32EE72D702F4`
 
 ### Licence
-Notepad MD is open source under the [MIT licence](https://github.com/mccabedd/notepad-md/blob/main/LICENSE). Bundled components keep their own licences: see [THIRD_PARTY_NOTICES.md](https://github.com/mccabedd/notepad-md/blob/main/THIRD_PARTY_NOTICES.md).
+NotePad-MD is open source under the [MIT licence](https://github.com/mccabedd/notepad-md/blob/main/LICENSE). Bundled components keep their own licences: see [THIRD_PARTY_NOTICES.md](https://github.com/mccabedd/notepad-md/blob/main/THIRD_PARTY_NOTICES.md).

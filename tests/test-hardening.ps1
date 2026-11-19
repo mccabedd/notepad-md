@@ -156,7 +156,7 @@ $cases = @(
   @('Malformed checksum', $fileUrl, 'sha256:1234', $newBytes.Length, 'no checksum'),
   @('Wrong checksum (tampered download)', $fileUrl, ('sha256:' + ('0' * 64)), $newBytes.Length, 'checksum test'),
   @('Wrong size', $fileUrl, "sha256:$goodHash", 12345, 'incomplete'),
-  @('Download from outside the project releases', 'https://example.com/NotepadMD.exe', "sha256:$goodHash", $newBytes.Length, 'outside the Notepad MD releases')
+  @('Download from outside the project releases', 'https://example.com/NotepadMD.exe', "sha256:$goodHash", $newBytes.Length, 'outside the NotePad-MD releases')
 )
 foreach ($c in $cases) {
   Write-Release $c[1] $c[2] $c[3]

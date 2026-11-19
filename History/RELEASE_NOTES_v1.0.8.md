@@ -4,7 +4,7 @@
 |---|---|
 | **Tag** | `v1.0.8` |
 | **Target** | `main` |
-| **Release title** | `Notepad MD v1.0.8` |
+| **Release title** | `NotePad-MD v1.0.8` |
 | **Binary to attach** | `src-tauri\target\release\NotepadMD-v1.0.8-win-x64.exe` (4.17 MB) |
 | **Set as the latest release** | ✔ |
 
@@ -12,9 +12,9 @@ Everything below the line is the release description.
 
 ---
 
-## Notepad MD v1.0.8
+## NotePad-MD v1.0.8
 
-If you have an earlier version, open **About → About Notepad MD → Check for Updates** to install this one. It reopens with all your tabs.
+If you have an earlier version, open **About → About NotePad-MD → Check for Updates** to install this one. It reopens with all your tabs.
 
 ### Faster
 - **Typing in medium-sized files is much quicker.** In a 100 KB Markdown file in split view, a keystroke now takes about 25 ms instead of 130 ms.
@@ -35,8 +35,8 @@ If you have an earlier version, open **About → About Notepad MD → Check for 
   - If the file is read-only, open in another program or the disk is full, you get a clear message and the original is left untouched.
   - If another program changes the file at the moment you save, you're asked before it is overwritten.
 - **Safe preview:** HTML inside a Markdown document can no longer run scripts, load other pages or restyle the app. It stays in your Markdown source, even when you edit in the preview. Exported HTML is cleaned the same way.
-- **Updates are verified more strictly.** Notepad MD only installs updates from its own GitHub releases, and only when the download matches the SHA-256 checksum GitHub publishes for it. A failed update always leaves your current version working.
-- **Unregistering file types** no longer removes the registration of another copy of Notepad MD on the same PC.
+- **Updates are verified more strictly.** NotePad-MD only installs updates from its own GitHub releases, and only when the download matches the SHA-256 checksum GitHub publishes for it. A failed update always leaves your current version working.
+- **Unregistering file types** no longer removes the registration of another copy of NotePad-MD on the same PC.
 
 ### Look
 - **Windows 11 style:**
@@ -52,4 +52,4 @@ If you have an earlier version, open **About → About Notepad MD → Check for 
 - **SHA-256:** `18FD82826733A625AE38C378CC7F8250E1B00BD1EA4F5C233C2235B58E4CF270`
 
 ### Licence
-Notepad MD is now open source under the [MIT licence](https://github.com/mccabedd/notepad-md/blob/main/LICENSE). Bundled components keep their own licences: see [THIRD_PARTY_NOTICES.md](https://github.com/mccabedd/notepad-md/blob/main/THIRD_PARTY_NOTICES.md).
+NotePad-MD is now open source under the [MIT licence](https://github.com/mccabedd/notepad-md/blob/main/LICENSE). Bundled components keep their own licences: see [THIRD_PARTY_NOTICES.md](https://github.com/mccabedd/notepad-md/blob/main/THIRD_PARTY_NOTICES.md).

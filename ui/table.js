@@ -1,4 +1,4 @@
-/* Table editing in the (Markdown) preview, Obsidian-style: right-click a cell for row/column
+/* Table editing in the (Markdown) preview: right-click a cell for row/column
  * commands, Tab / Shift+Tab move between cells (Tab in the last cell adds a row), Enter moves down.
  * Every change edits the preview DOM and is then written back to Markdown via syncFromPreview(). */
 

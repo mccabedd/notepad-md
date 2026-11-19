@@ -4,7 +4,7 @@
 |---|---|
 | **Tag** | `v1.0.4` |
 | **Target** | `main` |
-| **Release title** | `Notepad MD v1.0.4` |
+| **Release title** | `NotePad-MD v1.0.4` |
 | **Binary to attach** | `src-tauri\target\release\NotepadMD-v1.0.4-win-x64.exe` (4.08 MB) |
 | **Set as the latest release** | ✔ |
 
@@ -12,9 +12,9 @@ Everything below the line is the release description.
 
 ---
 
-## Notepad MD v1.0.4
+## NotePad-MD v1.0.4
 
-If you have an earlier version, open **About → About Notepad MD → Check for Updates** to install this one. It reopens with all your tabs.
+If you have an earlier version, open **About → About NotePad-MD → Check for Updates** to install this one. It reopens with all your tabs.
 
 ### Fixed
 - **Save As keeps the name you type.** Choose **All Files** and save as `config.yml`, `notes.txt`, `README` or any other name. Previously `.md` (or the tab's own extension) was added to the end, giving `config.yml.md`. With the tab's own file type selected, a name you type without an extension still gets that type's extension.

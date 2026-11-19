@@ -87,7 +87,7 @@ fn notify_assoc_changed() {
     unsafe { SHChangeNotify(0x0800_0000, 0, std::ptr::null(), std::ptr::null()) };
 }
 
-/// Adds Notepad MD to the "Open with" list of every extension (per user, no admin rights needed).
+/// Adds NotePad-MD to the "Open with" list of every extension (per user, no admin rights needed).
 /// Windows does not let apps make themselves the default silently; the user confirms that once
 /// in "Open with > Always" or Settings > Default apps.
 #[tauri::command]
@@ -98,12 +98,12 @@ pub fn cmd_register_file_types(exts: Vec<String>) -> Result<usize, String> {
     let root = classes_root()?;
 
     let (prog, _) = err(root.create_subkey(PROG_ID))?;
-    err(prog.set_value("", &"Notepad MD document"))?;
+    err(prog.set_value("", &"NotePad-MD document"))?;
     err(err(prog.create_subkey("DefaultIcon"))?.0.set_value("", &format!("\"{}\",0", exe_s)))?;
     err(err(prog.create_subkey("shell\\open\\command"))?.0.set_value("", &cmd))?;
 
     let (app, _) = err(root.create_subkey(format!("Applications\\{}", exe_file_name(&exe))))?;
-    err(app.set_value("FriendlyAppName", &"Notepad MD"))?;
+    err(app.set_value("FriendlyAppName", &"NotePad-MD"))?;
     err(err(app.create_subkey("shell\\open\\command"))?.0.set_value("", &cmd))?;
     let (types, _) = err(app.create_subkey("SupportedTypes"))?;
 
@@ -128,7 +128,7 @@ fn command_exe(cmd: &str) -> Option<String> {
     Some(rest[..rest.find('"')?].to_string())
 }
 
-/// Which copy of Notepad MD a registry command belongs to, compared with this exe.
+/// Which copy of NotePad-MD a registry command belongs to, compared with this exe.
 #[derive(Debug, PartialEq)]
 enum Owner {
     /// Missing, or points at this exe.
@@ -161,7 +161,7 @@ fn delete_tree(root: &RegKey, key: &str) -> Result<(), String> {
     }
 }
 
-/// Removes this copy's "Open with" entries. Entries that belong to another copy of Notepad MD
+/// Removes this copy's "Open with" entries. Entries that belong to another copy of NotePad-MD
 /// that still exists (a second portable copy) are left alone and reported; entries left by a copy
 /// that was moved or deleted are cleaned up. The extensions' own default programs are never touched.
 #[tauri::command]
@@ -175,7 +175,7 @@ pub fn cmd_unregister_file_types(exts: Vec<String>) -> Result<(), String> {
     }
     if let Owner::Other(p) = owner_of(read_command(&root, &format!("{}\\shell\\open", PROG_ID)), &exe_s) {
         notify_assoc_changed();
-        return Err(format!("The file types are registered to another copy of Notepad MD:\n{}\n\nUnregister them from that copy.", p));
+        return Err(format!("The file types are registered to another copy of NotePad-MD:\n{}\n\nUnregister them from that copy.", p));
     }
     delete_tree(&root, PROG_ID)?;
     for ext in exts.iter().map(|e| e.trim_start_matches('.').to_ascii_lowercase()) {
@@ -216,7 +216,7 @@ pub fn cmd_file_types_status() -> Result<FileTypeStatus, String> {
     })
 }
 
-/* ---------------- Explorer right-click "Edit in Notepad-MD" ---------------- */
+/* ---------------- Explorer right-click "Edit in NotePad-MD" ---------------- */
 
 /// A classic shell verb on every file type (`*`), per user. On Windows 11 classic verbs appear
 /// under "Show more options" (Shift+F10); the compact menu only lists packaged apps.
@@ -228,13 +228,13 @@ pub fn cmd_set_context_menu(enabled: bool) -> Result<(), String> {
     if enabled {
         let exe = exe_path()?.to_string_lossy().to_string();
         let (verb, _) = err(root.create_subkey(CONTEXT_VERB))?;
-        err(verb.set_value("", &"Edit in Notepad-MD"))?;
+        err(verb.set_value("", &"Edit in NotePad-MD"))?;
         err(verb.set_value("Icon", &format!("\"{}\",0", exe)))?;
         err(err(verb.create_subkey("command"))?.0.set_value("", &open_command(&exe)))?;
     } else {
         let exe = exe_path()?.to_string_lossy().to_string();
         if let Owner::Other(p) = owner_of(read_command(&root, CONTEXT_VERB), &exe) {
-            return Err(format!("The Explorer menu item belongs to another copy of Notepad MD:\n{}\n\nTurn it off from that copy.", p));
+            return Err(format!("The Explorer menu item belongs to another copy of NotePad-MD:\n{}\n\nTurn it off from that copy.", p));
         }
         delete_tree(&root, CONTEXT_VERB)?;
     }
@@ -477,7 +477,7 @@ pub async fn cmd_install_update(app: tauri::AppHandle, version: Option<String>) 
     }
     let asset_url = r.asset_url.ok_or("This release has no Windows download attached.")?;
     if !asset_url_trusted(&asset_url, test_mode) {
-        return Err("Refusing to download an update from outside the Notepad MD releases on GitHub.".into());
+        return Err("Refusing to download an update from outside the NotePad-MD releases on GitHub.".into());
     }
     let expected_hash = sha256_of_digest(r.digest.as_deref())
         .ok_or("This release has no checksum to verify the download against, so it was not installed. Download it from the releases page instead.")?;
@@ -492,7 +492,7 @@ pub async fn cmd_install_update(app: tauri::AppHandle, version: Option<String>) 
     if let Err(e) = curl(&["-sSL", "--fail", "--proto", protos, "--proto-redir", "=https", "--max-time", "600", "-H", USER_AGENT, "-o", &staged_s, &asset_url]) {
         remove_quietly(&staged);
         if !exe.parent().map(|d| d.exists()).unwrap_or(false) || std::fs::metadata(exe.parent().unwrap()).map(|m| m.permissions().readonly()).unwrap_or(false) {
-            return Err(format!("Could not write to {}. Move Notepad MD to a folder you can change, or download the update from the releases page.", exe.parent().unwrap().display()));
+            return Err(format!("Could not write to {}. Move NotePad-MD to a folder you can change, or download the update from the releases page.", exe.parent().unwrap().display()));
         }
         return Err(e);
     }

@@ -62,7 +62,7 @@ $exeReal = (Get-Item $Exe).FullName
 $label = (Get-ItemProperty -LiteralPath $verb -ErrorAction SilentlyContinue).'(default)'
 $icon = (Get-ItemProperty -LiteralPath $verb -ErrorAction SilentlyContinue).Icon
 $cmd = (Get-ItemProperty -LiteralPath "$verb\command" -ErrorAction SilentlyContinue).'(default)'
-T 'Ticking adds "Edit in Notepad-MD" with the app icon' "$r | label=$label icon=$icon cmd=$cmd" ($r -like 'true|*added*' -and $label -eq 'Edit in Notepad-MD' -and $icon -eq "`"$exeReal`",0" -and $cmd -eq "`"$exeReal`" `"%1`"")
+T 'Ticking adds "Edit in NotePad-MD" with the app icon' "$r | label=$label icon=$icon cmd=$cmd" ($r -like 'true|*added*' -and $label -eq 'Edit in NotePad-MD' -and $icon -eq "`"$exeReal`",0" -and $cmd -eq "`"$exeReal`" `"%1`"")
 $r = J "await refreshContextMenuStatus(); return ctxMenuBox.checked"
 T 'Status reads back as on' $r ($r -eq $true)
 Set-ItemProperty -LiteralPath "$verb\command" -Name '(default)' -Value '"C:\Old\notepad-md.exe" "%1"'

@@ -1,4 +1,4 @@
-# Notepad MD
+# NotePad-MD
 
 A Notepad-like desktop app for viewing and editing Markdown, text, BBCode and code/config files, with a live, directly-editable Markdown preview.
 
@@ -9,16 +9,16 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 ### Files and tabs
 - New / Open / Save / Save As / **Save All** (`Ctrl+Alt+S`) / Delete File via the File menu; Open accepts several files at once. Files can also be **dragged onto the window** or passed on the command line. Files up to 100 MB open; files over 5 MB (big logs) open in Edit Only without spell checking. Files over about 300,000 characters (up to 4 MB) are coloured in the background: the text shows plainly while you type and the colours return a moment after you pause. Above 4 MB the editor shows plain text. Typing in multi-megabyte files is slow (a limit of the browser's text box).
 - **Recent Files** (File menu) lists the last 10 files you opened or saved; **Reopen Closed Tab** (`Ctrl+Shift+T`) brings back tabs you closed, including any unsaved text.
-- **Files changed by other programs** — Notepad MD notices when an open file is changed, deleted or moved outside it. A tab without unsaved edits simply reloads; one with unsaved edits shows a bar asking whether to reload or keep your version. Save never silently overwrites a file someone else changed: it asks first. **File > Reload from Disk** re-reads a file on demand.
+- **Files changed by other programs** — NotePad-MD notices when an open file is changed, deleted or moved outside it. A tab without unsaved edits simply reloads; one with unsaved edits shows a bar asking whether to reload or keep your version. Save never silently overwrites a file someone else changed: it asks first. **File > Reload from Disk** re-reads a file on demand.
 - **Follow File (Tail)** (View menu) — for log files: new lines appear as the file grows, and the view stays at the end. The status bar shows *Following*; click it to stop.
 - **Print** (`Ctrl+P`), **Export as PDF** and **Export as HTML** (File menu) — the rendered Markdown / BBCode (or coloured code) on a clean white page. Exported HTML is a single file with its styles built in.
-- **Session restore** (like Notepad++) — closing the app never prompts; every open tab, including unsaved edits, untitled documents, pins, bookmarks, per-tab view and font size, comes back on the next launch. Files on disk only change when you save. (Can be turned off in Settings; closing then offers to save unsaved changes.)
+- **Session restore** — closing the app never prompts; every open tab, including unsaved edits, untitled documents, pins, bookmarks, per-tab view and font size, comes back on the next launch. Files on disk only change when you save. (Can be turned off in Settings; closing then offers to save unsaved changes.)
 - **Remembered state** — window size/position, theme, toolbar, menu bar, sidebar, status bar, line numbers, word wrap, spelling, the find bar / Advanced pane (filters, options, height) and all Settings survive a restart. Everything is kept in `%APPDATA%\com.notepadmd.app\session.json`, including the text of unsaved tabs (there are no separate temp files). `instance.json` next to it lets a second launch find the running window.
 - **Tabs** — always shown. Unsaved tabs show a `*` before the name; the active tab has a red bar along its top. `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle, `Ctrl+W` or middle-click closes, double-click the empty tab bar for a new document. When there are many tabs, the mouse wheel steps through them exactly like the ‹ › buttons.
 - **Drag tabs** to rearrange them (pinned tabs stay together at the left). The order is remembered.
 - **Rename a tab** by double-clicking its name: an untitled tab just gets the new name; a saved file is renamed on disk (in the same folder; it won't overwrite another file).
-- **One window** — opening a file while Notepad MD is already running (double-click, *Open with*, command line) opens it as a tab in the running window instead of starting a second copy.
-- New documents are numbered like Notepad++: a new tab takes the lowest free number (*Untitled*, *Untitled 2*, …). Empty untitled tabs are kept across restarts too.
+- **One window** — opening a file while NotePad-MD is already running (double-click, *Open with*, command line) opens it as a tab in the running window instead of starting a second copy.
+- New documents are numbered: a new tab takes the lowest free number (*Untitled*, *Untitled 2*, …). Empty untitled tabs are kept across restarts too.
 - **New tab** — the little **+** tab after the last tab (always there, even when the tabs scroll), `Ctrl+N`, or double-click the empty part of the tab bar. The caret is already in the new tab (in the editor, or in the preview in Preview Only), so you can start typing straight away.
 - **Tab right-click menu** — Save, Save As, Save All, Reload from Disk, Pin/Unpin, Close, Close Others / Close All (both keep pinned tabs), Reopen Closed Tab, Copy Full Path.
 - **Pinned tabs** — pin icon on the tab; pinned tabs stay at the left.
@@ -41,14 +41,14 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 
 ### Editing
 - Edit directly in the rendered Markdown preview — changes sync back to the Markdown source, and vice versa.
-- Every new line in the source is a new line in the preview (like Obsidian), so a list of links or log lines isn't run together. Plain links stay plain links when the preview is edited.
+- Every new line in the source is a new line in the preview, so a list of links or log lines isn't run together. Plain links stay plain links when the preview is edited.
 - **Tab key** inserts a tab in the editor; with several lines selected, `Tab` / `Shift+Tab` indent / outdent them. In a preview list, `Tab` / `Shift+Tab` nest / un-nest the item. Lists are written as `- item` (no growing indents).
-- **Indent guides** — faint vertical lines at each indent step in the editor (like Notepad++).
+- **Indent guides** — faint vertical lines at each indent step in the editor.
 - **Bold / italic** — `Ctrl+B` / `Ctrl+I` (or Edit menu) wrap the selection in `**…**` / `_…_` (BBCode: `[b]…[/b]` / `[i]…[/i]`); press again to remove. They also work in the preview.
 - **Auto-closing brackets and quotes** — typing `(`, `[`, `{`, `"`, `'` or `` ` `` adds the closing one; typing it again steps over it, and `Backspace` removes both. With text selected, it wraps the selection (in Markdown also `*`, `_`, `~`). Apostrophes (*don't*) are left alone. Can be turned off in Settings.
 - **Links in the editor** are underlined; double-click (or `Ctrl`+click) opens them in your browser. Right-clicking a link adds Open link in new window, Save link as and Copy link to the top of the normal right-click menu.
 - **Code blocks in the preview** — `Arrow Down` at the end, or `Enter` on an empty last line, takes you out of the block (there is always a line below it to click into).
-- **Tables in the preview** (Obsidian-style) — right-click a cell: add row above/below, add column left/right, move row up/down, move column left/right, align column (left/center/right), delete row/column/table. `Tab` / `Shift+Tab` move between cells (Tab in the last cell adds a row), `Enter` moves down.
+- **Tables in the preview** — right-click a cell: add row above/below, add column left/right, move row up/down, move column left/right, align column (left/center/right), delete row/column/table. `Tab` / `Shift+Tab` move between cells (Tab in the last cell adds a row), `Enter` moves down.
 - **Syntax colouring** for XML, HTML, CSS, YAML, JSON, INI, TOML, Python, JavaScript, Java, C, C#, C++, PowerShell (`.ps1`), MS-DOS batch (`.bat` / `.cmd`), PHP, Markdown, **BBCode** (`.bbcode` / `.bb`) and **log files**. A file named `log.txt` (any upper/lower case) opens as a Log File: error/fail words in red, warnings amber, info blue, debug grey, success words green, plus timestamps, `[thread]` tags, `key=value` names, paths, numbers, IDs and stack-trace lines. Other `.txt` files stay plain text; any tab can be switched to Log File from View > Language. Code files show a read-only coloured view in the preview pane; BBCode shows a formatted, read-only preview (bold/italic/underline, links, images, quotes, lists, colours, sizes, code, tables, spoilers).
 - **Spell checking** in English (UK) or English (US) in the editor and preview; right-click a red-underlined word for suggestions, *Add to dictionary* or *Ignore*. `F7` toggles it; click the language in the status bar to switch.
 - **Toolbar** (off by default) with undo/redo, headings, bold/italic/strike/underline, copy/cut/paste, table, code block, checklist, lists, indent, font size, find, delete file.
@@ -71,11 +71,11 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 Theme; use the Windows accent colour (on by default; links, selected items and buttons follow your Windows colour); reopen tabs on start; menu bar / toolbar / sidebar / status bar; outline panel; tab header font size; line numbers; word wrap; auto-close brackets and quotes; tab width; editor font, size, style (regular/bold/italic), text colour and background; preview font, size, style, text colour and background ("Use theme" returns a colour to the light/dark theme); default view for new tabs (each tab can still be zoomed with Ctrl+wheel; Ctrl+0 goes back to the editor and preview sizes); spell checking and language; Reset to defaults.
 
 - **Import / Export** — save all settings (plus your spelling dictionary) to a `.json` file and load them on another PC. Importing merges the dictionary.
-- **Edit in Notepad-MD** — a checkbox adds *Edit in Notepad-MD* (with the app's icon) to Explorer's right-click menu for every file (per user, no admin needed). On Windows 11 it's under *Show more options* / Shift+right-click, because the new compact menu only lists packaged (Store/MSIX) apps.
-- **Register file types** — adds Notepad MD to Windows' "Open with" list for every supported extension (per user, no admin needed; *Unregister* removes it). Windows only lets you pick the *default* app yourself, so **Open Windows Default Apps** takes you there (or right-click a file > Open with > Choose another app > Notepad MD > Always).
+- **Edit in NotePad-MD** — a checkbox adds *Edit in NotePad-MD* (with the app's icon) to Explorer's right-click menu for every file (per user, no admin needed). On Windows 11 it's under *Show more options* / Shift+right-click, because the new compact menu only lists packaged (Store/MSIX) apps.
+- **Register file types** — adds NotePad-MD to Windows' "Open with" list for every supported extension (per user, no admin needed; *Unregister* removes it). Windows only lets you pick the *default* app yourself, so **Open Windows Default Apps** takes you there (or right-click a file > Open with > Choose another app > NotePad-MD > Always).
 
 ### About and updates
-**About > About Notepad MD** shows the version, the GitHub link and the author, plus **Check for Updates**. It asks GitHub for the latest release of `mccabedd/notepad-md`. If it's newer, it shows the release notes and asks first. It then downloads the `.exe` attached to the release and checks it: a valid program, the expected size, and GitHub's SHA-256 checksum. Finally it swaps it in for the running exe, restarts, and reopens every tab. If the app sits in a folder you can't write to, it says so and leaves the download in `%TEMP%\notepadmd-update`.
+**About > About NotePad-MD** shows the version, the GitHub link and the author, plus **Check for Updates**. It asks GitHub for the latest release of `mccabedd/notepad-md`. If it's newer, it shows the release notes and asks first. It then downloads the `.exe` attached to the release and checks it: a valid program, the expected size, and GitHub's SHA-256 checksum. Finally it swaps it in for the running exe, restarts, and reopens every tab. If the app sits in a folder you can't write to, it says so and leaves the download in `%TEMP%\notepadmd-update`.
 
 To publish an update: bump `version` in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`, build, create a GitHub release tagged `vX.Y.Z`, and attach the `.exe`.
 
@@ -122,7 +122,7 @@ cargo run
 
 ## Licence
 
-Notepad MD is released under the [MIT licence](LICENSE). The bundled third-party components keep their own licences; their full texts are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+NotePad-MD is released under the [MIT licence](LICENSE). The bundled third-party components keep their own licences; their full texts are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Third-party components
 

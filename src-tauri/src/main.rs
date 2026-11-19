@@ -493,7 +493,7 @@ fn main() {
                 app,
                 "About",
                 true,
-                &[&MenuItem::with_id(app, "about", "About Notepad MD...", true, None::<&str>)?],
+                &[&MenuItem::with_id(app, "about", "About NotePad-MD...", true, None::<&str>)?],
             )?;
 
             app.manage(MenuChecks(Mutex::new(checks)));

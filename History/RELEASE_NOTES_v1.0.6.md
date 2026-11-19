@@ -4,7 +4,7 @@
 |---|---|
 | **Tag** | `v1.0.6` |
 | **Target** | `main` |
-| **Release title** | `Notepad MD v1.0.6` |
+| **Release title** | `NotePad-MD v1.0.6` |
 | **Binary to attach** | `src-tauri\target\release\NotepadMD-v1.0.6-win-x64.exe` (4.14 MB) |
 | **Set as the latest release** | ✔ |
 
@@ -12,9 +12,9 @@ Everything below the line is the release description.
 
 ---
 
-## Notepad MD v1.0.6
+## NotePad-MD v1.0.6
 
-If you have an earlier version, open **About → About Notepad MD → Check for Updates** to install this one. It reopens with all your tabs.
+If you have an earlier version, open **About → About NotePad-MD → Check for Updates** to install this one. It reopens with all your tabs.
 
 ### New
 - **View → Language** is now a submenu that lists every language, with a tick next to the current one. Pick one to colour the tab that way. For example, type HTML into a new tab and choose **HTML**. **Auto-detect from File Extension** goes back to the default. If you pick a code language while in Preview Only, the tab switches to Edit Only so you can keep typing.

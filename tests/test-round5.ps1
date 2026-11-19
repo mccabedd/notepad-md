@@ -60,7 +60,7 @@ $json = Get-Content $exportPath -Raw | ConvertFrom-Json
 T 'Export writes a settings file' "kind=$($json.kind) font=$($json.settings.editFont) words=$($json.spell.userWords -join ',')" ($json.kind -eq 'settings' -and $json.settings.editFont -eq 'Cascadia Code' -and ($json.spell.userWords -contains 'notepadmd'))
 T 'Import restores settings + dictionary and applies them' $r ($r -eq 'Consolas|true|14 -> Cascadia Code|false|17|true|true')
 $r = J "try { applyImportedSettings({hello:1}); return 'accepted'; } catch (e) { return e.message; }"
-T 'Import rejects a non-settings file' $r ($r -eq 'This is not a Notepad MD settings file.')
+T 'Import rejects a non-settings file' $r ($r -eq 'This is not a NotePad-MD settings file.')
 J "openSettings(); return 1" | Out-Null
 function WaitDialog { for ($i = 0; $i -lt 20; $i++) { if (Has-Dialog) { return $true }; Start-Sleep -Milliseconds 250 }; return $false }
 J "document.getElementById('settings-export').click(); return 1" | Out-Null

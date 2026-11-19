@@ -6,7 +6,7 @@ Fill in the GitHub "Draft a new release" form (https://github.com/mccabedd/notep
 |---|---|
 | **Choose a tag** | `v1.0.0` (type it and pick "Create new tag: v1.0.0 on publish") |
 | **Target** | `main` |
-| **Release title** | `Notepad MD v1.0.0` |
+| **Release title** | `NotePad-MD v1.0.0` |
 | **Binary to attach** | `src-tauri\target\release\NotepadMD-v1.0.0-win-x64.exe` (3.99 MB) |
 | **Set as the latest release** | ✔ |
 
@@ -14,9 +14,9 @@ Everything below the line is the release description — copy/paste it into the 
 
 ---
 
-## Notepad MD v1.0.0
+## NotePad-MD v1.0.0
 
-The first public release of **Notepad MD**, a lightweight, Notepad-style Markdown editor for Windows. You can type straight into the rendered preview. There's no separate edit-then-render step.
+The first public release of **NotePad-MD**, a lightweight, Notepad-style Markdown editor for Windows. You can type straight into the rendered preview. There's no separate edit-then-render step.
 
 It's built with Rust + [Tauri v2](https://tauri.app) on the WebView2 engine that ships with Windows, so the whole app is a **single 4.0 MB executable**. There's no installer, no bundled Chromium and no runtime to install.
 
@@ -33,7 +33,7 @@ It's built with Rust + [Tauri v2](https://tauri.app) on the WebView2 engine that
 
 **Editing**
 - Edit directly in the rendered preview. Changes sync two ways with the raw Markdown source.
-- **Tables in the preview** work like Obsidian's. Right-click a cell to add, move, align or delete rows and columns. `Tab` / `Shift+Tab` move between cells; `Tab` in the last cell adds a row.
+- **Tables in the preview**: right-click a cell to add, move, align or delete rows and columns. `Tab` / `Shift+Tab` move between cells; `Tab` in the last cell adds a row.
 - Four layouts: **Edit Only**, **Preview Only**, **Edit Left / Preview Right**, **Preview Left / Edit Right** (`Ctrl+Alt+1`–`4`, the View menu, or the right-hand sidebar). **Each tab keeps its own layout and font size** (`Ctrl`+mouse wheel, `Ctrl++` / `Ctrl+-`, `Ctrl+0` to reset).
 - **Markdown or BBCode preview, per tab.** Use the sidebar's `MD` / `BB` button (`Ctrl+Alt+M` / `Ctrl+Alt+B`), or click the language in the status bar to choose any language or go back to auto-detect.
 - **Word wrap** on or off (`Alt+Z`).
@@ -55,7 +55,7 @@ It's built with Rust + [Tauri v2](https://tauri.app) on the WebView2 engine that
 
 **Documents and tabs**
 - Open files from the Open dialog (several at once), by **dragging them onto the window**, or by passing paths on the command line.
-- **Session restore**, like Notepad++: closing the app never prompts. Every tab, including unsaved edits and untitled documents, comes back on the next launch with its pin, layout, font size and bookmarks. You can turn this off in Settings, and the app then offers to save on close.
+- **Session restore**: closing the app never prompts. Every tab, including unsaved edits and untitled documents, comes back on the next launch with its pin, layout, font size and bookmarks. You can turn this off in Settings, and the app then offers to save on close.
 - **Everything is remembered:** window size and position, theme, toolbar, menu bar, sidebar, line numbers, word wrap, find and Advanced state, and all Settings.
 - An always-visible tab bar. Unsaved tabs show a `*` before the name, and the active tab has a red bar along its top. The mouse wheel scrolls through many tabs. The tab right-click menu has Save, Save As, Pin, Close Others and Close All (pinned tabs are kept).
 
@@ -65,10 +65,10 @@ It's built with Rust + [Tauri v2](https://tauri.app) on the WebView2 engine that
 - **New tabs:** default view and font size.
 - **Spelling:** on or off, and the language.
 - **Import / Export** of all settings, including your spelling dictionary.
-- **Register file types:** adds Notepad MD to Windows' "Open with" list for every supported extension, with a shortcut to Windows Default Apps.
+- **Register file types:** adds NotePad-MD to Windows' "Open with" list for every supported extension, with a shortcut to Windows Default Apps.
 
 **About and updates**
-- **About → About Notepad MD** shows the version, the project link and **Check for Updates**. It finds the newest GitHub release and asks before installing. It then downloads and verifies it, replaces the app, and reopens it with your tabs.
+- **About → About NotePad-MD** shows the version, the project link and **Check for Updates**. It finds the newest GitHub release and asks before installing. It then downloads and verifies it, replaces the app, and reopens it with your tabs.
 
 **Formatting toolbar** (hidden by default, toggle with `Ctrl+T` or View → Toolbar)
 - Headings H1–H4, bold, italic, strikethrough, underline

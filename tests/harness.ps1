@@ -1,4 +1,4 @@
-﻿# Test harness: launch Notepad MD with a CDP debug port, send real keystrokes, read JS state.
+﻿# Test harness: launch NotePad-MD with a CDP debug port, send real keystrokes, read JS state.
 # Everything the tests write (session, WebView2 profile, sample files) lives in $script:TestDir
 # (NOTEPADMD_TEST_DIR, default %TEMP%\notepadmd-tests), never in your real profile.
 $script:TestDir = . "$PSScriptRoot\testdir.ps1"
@@ -41,7 +41,7 @@ public static class KB {
             uint p; GetWindowThreadProcessId(h, out p);
             if (p == pid && IsWindowVisible(h)) {
                 var t = new StringBuilder(256); GetWindowText(h, t, 256);
-                if (t.ToString().Contains("Notepad MD")) { found = h; return false; }
+                if (t.ToString().Contains("NotePad-MD")) { found = h; return false; }
             }
             return true;
         }, IntPtr.Zero);
@@ -145,7 +145,7 @@ $VK = @{ CTRL = 0x11; ALT = 0x12; SHIFT = 0x10; TAB = 0x09; ESC = 0x1B; ENTER = 
 # Press a combo like 'CTRL+ALT+1' or 'CTRL+SHIFT+OEM_PLUS'
 function Send-Combo([string]$combo) {
     if ([KB]::GetForegroundWindow() -ne $script:hwnd) {
-        if (-not [KB]::ForceForeground($script:hwnd)) { throw "Notepad MD lost focus; refusing to send $combo" }
+        if (-not [KB]::ForceForeground($script:hwnd)) { throw "NotePad-MD lost focus; refusing to send $combo" }
         Start-Sleep -Milliseconds 200
     }
     $parts = $combo.Split('+')

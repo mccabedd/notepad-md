@@ -4,7 +4,7 @@
 |---|---|
 | **Tag** | `v1.0.3` |
 | **Target** | `main` |
-| **Release title** | `Notepad MD v1.0.3` |
+| **Release title** | `NotePad-MD v1.0.3` |
 | **Binary to attach** | `src-tauri\target\release\NotepadMD-v1.0.3-win-x64.exe` (4.05 MB) |
 | **Set as the latest release** | ✔ |
 
@@ -12,9 +12,9 @@ Everything below the line is the release description.
 
 ---
 
-## Notepad MD v1.0.3
+## NotePad-MD v1.0.3
 
-If you have an earlier version, open **About → About Notepad MD → Check for Updates** to install this one. It reopens with all your tabs.
+If you have an earlier version, open **About → About NotePad-MD → Check for Updates** to install this one. It reopens with all your tabs.
 
 ### Fixed
 - **Right-click menus work again**: spelling suggestions on red-underlined words, and Save / Save As / Pin / Close on a tab (broken in v1.0.2).
@@ -26,7 +26,7 @@ If you have an earlier version, open **About → About Notepad MD → Check for 
 ### New
 - **Rename a tab** by double-clicking its name. An untitled tab simply gets the new name; a saved file is renamed on disk.
 - **Links in the editor** are underlined. Double-click (or `Ctrl`+click) opens them in your browser; right-clicking a link adds **Open link in new window**, **Save link as** and **Copy link** to the top of the normal right-click menu (the same as in the preview). Words inside links are no longer spell-checked.
-- **Indent guides** in the editor, like Notepad++.
+- **Indent guides** in the editor.
 - **Tab header font size** in Settings → General.
 - **Ticks in the View menu** show what's on (word wrap, toolbar, line numbers, layout, preview mode, spelling, dark theme).
 - Menus are now **File, Edit, View, Search, About**.

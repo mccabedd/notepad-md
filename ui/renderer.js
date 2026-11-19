@@ -124,7 +124,7 @@ function defaultLayoutFor(lang) {
 /* ---------- markdown engine ---------- */
 
 function setupMarkdownEngine() {
-  // breaks: every new line in the source is a new line in the preview (like Obsidian), so a
+  // breaks: every new line in the source is a new line in the preview, so a
   // list of links or log lines isn't run together into one paragraph. A <br> written back from
   // the preview becomes a plain new line again (br: '').
   marked_.setOptions({ gfm: true, breaks: true });
@@ -251,7 +251,7 @@ function makeDoc(path, content, opts = {}) {
   };
   doc.lastContent = doc.content;
   if (!doc.path) {
-    // Like Notepad++: a new document takes the lowest number no open tab is using.
+    // A new document takes the lowest number no open tab is using.
     doc.untitledNum = opts.untitledNum || lowestFreeUntitledNum(docs);
   }
   doc.dirty = doc.content !== doc.savedContent;
@@ -1711,7 +1711,7 @@ let lastWindowTitle = '';
 function updateWindowTitle() {
   const doc = getActive();
   if (!doc) return;
-  const title = (doc.dirty ? '*' : '') + tabTitle(doc) + ' - Notepad MD';
+  const title = (doc.dirty ? '*' : '') + tabTitle(doc) + ' - NotePad-MD';
   if (title === lastWindowTitle) return;
   lastWindowTitle = title;
   try {
@@ -2295,7 +2295,7 @@ async function handleCloseRequested() {
     /* older backend */
   }
   saveDocView(getActive());
-  // Like Notepad++: with session restore on there is no prompt - every tab, including unsaved
+  // With session restore on there is no prompt - every tab, including unsaved
   // edits, comes back on next launch. With it off, unsaved changes are offered for saving.
   if (!settings.restoreSession) {
     const dirty = docs.filter((d) => d.dirty);

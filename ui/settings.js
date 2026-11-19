@@ -290,7 +290,7 @@ async function checkForUpdates() {
     const ok = await dialogApi.ask(
       'Version ' + u.latest + ' is available (you have ' + u.current + ').\n\n' +
         (notes ? notes.slice(0, 600) + (notes.length > 600 ? '…' : '') + '\n\n' : '') +
-        'Download and install it now? Notepad MD will close and reopen with your tabs.',
+        'Download and install it now? NotePad-MD will close and reopen with your tabs.',
       { title: 'Update available', kind: 'info', okLabel: 'Update now', cancelLabel: 'Later' }
     );
     if (!ok) {
@@ -342,7 +342,7 @@ function settingsMessage(text, isError) {
 
 function exportableSettings() {
   return {
-    app: 'Notepad MD',
+    app: 'NotePad-MD',
     kind: 'settings',
     version: 1,
     settings: { ...settings },
@@ -355,7 +355,7 @@ function exportableSettings() {
 
 async function exportSettings() {
   const path = await dialogApi.save({
-    filters: [{ name: 'Notepad MD settings', extensions: ['json'] }],
+    filters: [{ name: 'NotePad-MD settings', extensions: ['json'] }],
     defaultPath: 'notepad-md-settings.json',
   });
   if (!path) return;
@@ -369,7 +369,7 @@ async function exportSettings() {
 
 /** Applies an exported settings object; the spelling dictionary is merged, not replaced. */
 function applyImportedSettings(data) {
-  if (!data || data.kind !== 'settings' || typeof data.settings !== 'object') throw new Error('This is not a Notepad MD settings file.');
+  if (!data || data.kind !== 'settings' || typeof data.settings !== 'object') throw new Error('This is not a NotePad-MD settings file.');
   loadSettings({ ...settings, ...data.settings });
   if (['system', 'light', 'dark'].includes(data.theme)) {
     themeOverride = data.theme === 'system' ? null : data.theme;
@@ -394,7 +394,7 @@ async function importSettings() {
   const sel = await dialogApi.open({
     multiple: false,
     filters: [
-      { name: 'Notepad MD settings', extensions: ['json'] },
+      { name: 'NotePad-MD settings', extensions: ['json'] },
       { name: 'All Files', extensions: ['*'] },
     ],
   });
@@ -422,7 +422,7 @@ async function refreshFileTypeStatus() {
   try {
     const s = await invoke('cmd_file_types_status');
     ftStatus.textContent = s.registered
-      ? '✓ Registered: Notepad MD appears in "Open with" for these file types.'
+      ? '✓ Registered: NotePad-MD appears in "Open with" for these file types.'
       : s.other_exe
       ? 'Registered for a different copy of the app (' + s.other_exe.replace(/ "%1"$/, '') + '). Click Register to point it at this one.'
       : 'Not registered.';
@@ -432,7 +432,7 @@ async function refreshFileTypeStatus() {
   await refreshContextMenuStatus();
 }
 
-/* ---------- Explorer right-click "Edit in Notepad-MD" ---------- */
+/* ---------- Explorer right-click "Edit in NotePad-MD" ---------- */
 
 const ctxMenuBox = document.getElementById('explorer-menu');
 const ctxStatus = document.getElementById('explorer-menu-status');
@@ -452,7 +452,7 @@ async function refreshContextMenuStatus() {
 async function setContextMenu(enabled) {
   try {
     await invoke('cmd_set_context_menu', { enabled });
-    settingsMessage(enabled ? '"Edit in Notepad-MD" added to the Explorer right-click menu.' : '"Edit in Notepad-MD" removed from the Explorer right-click menu.');
+    settingsMessage(enabled ? '"Edit in NotePad-MD" added to the Explorer right-click menu.' : '"Edit in NotePad-MD" removed from the Explorer right-click menu.');
   } catch (e) {
     settingsMessage('Could not change the right-click menu: ' + e, true);
   }

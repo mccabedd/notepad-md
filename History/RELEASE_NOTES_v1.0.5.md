@@ -4,7 +4,7 @@
 |---|---|
 | **Tag** | `v1.0.5` |
 | **Target** | `main` |
-| **Release title** | `Notepad MD v1.0.5` |
+| **Release title** | `NotePad-MD v1.0.5` |
 | **Binary to attach** | `src-tauri\target\release\NotepadMD-v1.0.5-win-x64.exe` (4.13 MB) |
 | **Set as the latest release** | ✔ |
 
@@ -12,12 +12,12 @@ Everything below the line is the release description.
 
 ---
 
-## Notepad MD v1.0.5
+## NotePad-MD v1.0.5
 
-If you have an earlier version, open **About → About Notepad MD → Check for Updates** to install this one. It reopens with all your tabs.
+If you have an earlier version, open **About → About NotePad-MD → Check for Updates** to install this one. It reopens with all your tabs.
 
 ### New
-- **Notices when a file changes outside Notepad MD.** If another program changes, deletes or moves a file you have open:
+- **Notices when a file changes outside NotePad-MD.** If another program changes, deletes or moves a file you have open:
   - A tab with no unsaved edits simply reloads.
   - A tab with unsaved edits shows a bar where you choose to reload or keep your version.
   - **Save** asks before it overwrites a file that someone else changed.

@@ -1612,7 +1612,7 @@ body.tab-dragging * {
   scrollbar-color: var(--scroll-thumb) transparent;
 }
 
-/* Indent guides in the editor: a faint line at the start of each indent step (like Notepad++).
+/* Indent guides in the editor: a faint line at the start of each indent step.
    A background, not a border, so the coloured layer keeps exactly the textarea's text widths. */
 .editor-highlight .ig {
   background-image: linear-gradient(to right, var(--indent-guide) 1px, transparent 1px);

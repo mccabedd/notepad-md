@@ -4,7 +4,7 @@
 |---|---|
 | **Tag** | `v1.0.7` |
 | **Target** | `main` |
-| **Release title** | `Notepad MD v1.0.7` |
+| **Release title** | `NotePad-MD v1.0.7` |
 | **Binary to attach** | `src-tauri\target\release\NotepadMD-v1.0.7-win-x64.exe` (4.14 MB) |
 | **Set as the latest release** | ✔ |
 
@@ -12,9 +12,9 @@ Everything below the line is the release description.
 
 ---
 
-## Notepad MD v1.0.7
+## NotePad-MD v1.0.7
 
-If you have an earlier version, open **About → About Notepad MD → Check for Updates** to install this one. It reopens with all your tabs.
+If you have an earlier version, open **About → About NotePad-MD → Check for Updates** to install this one. It reopens with all your tabs.
 
 ### Fixed
 - **Big files are coloured in the editor too, not just the preview.** This applies to files over about 300,000 characters and up to 4 MB, such as a large `LOG.TXT`.
