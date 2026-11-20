@@ -290,6 +290,8 @@ fn main() {
             system::cmd_register_file_types,
             system::cmd_unregister_file_types,
             system::cmd_file_types_status,
+            system::cmd_file_type_states,
+            system::cmd_set_file_types,
             system::cmd_open_default_apps,
             system::cmd_system_accent,
             system::cmd_set_context_menu,
@@ -440,38 +442,97 @@ fn main() {
                     &MenuItem::with_id(app, "find_next", "Find Next", true, Some("F3"))?,
                     &MenuItem::with_id(app, "find_prev", "Find Previous", true, Some("Shift+F3"))?,
                     &PredefinedMenuItem::separator(app)?,
+                    &MenuItem::with_id(app, "diag_next", "Next Problem", true, Some("F8"))?,
+                    &MenuItem::with_id(app, "diag_prev", "Previous Problem", true, Some("Shift+F8"))?,
+                    &MenuItem::with_id(app, "diag_check", "Check Syntax Now", true, None::<&str>)?,
+                    &PredefinedMenuItem::separator(app)?,
                     &bookmark_submenu,
                 ],
             )?;
 
             // View > Language: every language a tab can be shown as (ids match LANGS in ui/renderer.js).
-            const LANGUAGES: [(&str, &str); 20] = [
+            // Text formats at the top, the rest grouped (same groups as the status-bar language menu).
+            const TEXT_LANGUAGES: [(&str, &str); 4] = [
                 ("markdown", "Markdown"),
                 ("plaintext", "Plain Text"),
                 ("bbcode", "BBCode"),
                 ("log", "Log File"),
-                ("html", "HTML"),
-                ("xml", "XML"),
-                ("css", "CSS"),
-                ("javascript", "JavaScript"),
-                ("json", "JSON"),
-                ("yaml", "YAML"),
-                ("ini", "INI"),
-                ("toml", "TOML"),
-                ("python", "Python"),
-                ("powershell", "PowerShell"),
-                ("dos", "MS-DOS Batch"),
-                ("php", "PHP"),
-                ("java", "Java"),
-                ("c", "C"),
-                ("cpp", "C++"),
-                ("csharp", "C#"),
+            ];
+            const LANGUAGE_GROUPS: [(&str, &[(&str, &str)]); 5] = [
+                (
+                    "Web and Data",
+                    &[
+                        ("xml", "XML"),
+                        ("html", "HTML"),
+                        ("css", "CSS"),
+                        ("json", "JSON"),
+                        ("jsonc", "JSON with Comments"),
+                        ("json5", "JSON5"),
+                        ("jsonl", "JSON Lines"),
+                        ("yaml", "YAML"),
+                        ("toml", "TOML"),
+                        ("sql", "SQL"),
+                        ("diff", "Diff / Patch"),
+                    ],
+                ),
+                (
+                    "Scripts",
+                    &[
+                        ("bash", "Shell / Bash"),
+                        ("powershell", "PowerShell"),
+                        ("dos", "MS-DOS Batch"),
+                        ("python", "Python"),
+                        ("javascript", "JavaScript"),
+                        ("php", "PHP"),
+                        ("perl", "Perl"),
+                        ("ruby", "Ruby"),
+                        ("awk", "AWK (no colouring)"),
+                        ("sed", "sed (no colouring)"),
+                    ],
+                ),
+                (
+                    "Configuration",
+                    &[
+                        ("ini", "INI"),
+                        ("env", "Environment (.env)"),
+                        ("systemd", "systemd Unit"),
+                        ("desktop", "Desktop Entry"),
+                        ("compose", "Docker Compose"),
+                        ("dockerfile", "Dockerfile"),
+                        ("makefile", "Makefile"),
+                        ("nginx", "NGINX"),
+                        ("apache", "Apache (.htaccess)"),
+                        ("hcl", "HCL / Terraform"),
+                        ("ignore", "Ignore File (.gitignore)"),
+                        ("requirements", "pip Requirements"),
+                        ("cmake", "CMake (no colouring)"),
+                        ("htpasswd", "Password File (.htpasswd)"),
+                    ],
+                ),
+                (
+                    "Programming",
+                    &[
+                        ("java", "Java"),
+                        ("groovy", "Groovy / Jenkinsfile"),
+                        ("c", "C"),
+                        ("cpp", "C++"),
+                        ("csharp", "C#"),
+                    ],
+                ),
+                ("Certificates and Keys", &[("pem", "Certificate / Key (PEM)")]),
             ];
             let language_submenu = Submenu::with_id(app, "language_submenu", "Language", true)?;
-            language_submenu.append(&check("lang_auto", "Auto-detect from File Extension", None)?)?;
+            language_submenu.append(&check("lang_auto", "Auto-detect from File Name", None)?)?;
             language_submenu.append(&PredefinedMenuItem::separator(app)?)?;
-            for (id, label) in LANGUAGES {
+            for (id, label) in TEXT_LANGUAGES {
                 language_submenu.append(&check(&format!("lang_{id}"), label, None)?)?;
+            }
+            for (title, langs) in LANGUAGE_GROUPS {
+                let group = Submenu::with_items(app, title, true, &[])?;
+                for (id, label) in langs {
+                    group.append(&check(&format!("lang_{id}"), label, None)?)?;
+                }
+                language_submenu.append(&group)?;
             }
 
             let view_submenu = Submenu::with_items(

@@ -216,6 +216,123 @@ pub fn cmd_file_types_status() -> Result<FileTypeStatus, String> {
     })
 }
 
+/* ---------------- one extension at a time (Settings > File Types) ---------------- */
+
+/// Whether `.ext` lists NotePad-MD in its "Open with" programs (HKCU only; defaults are never read or changed).
+fn ext_registered(root: &RegKey, ext: &str) -> bool {
+    root.open_subkey(format!(".{}\\OpenWithProgids", ext))
+        .ok()
+        .map(|k| k.get_raw_value(PROG_ID).is_ok())
+        .unwrap_or(false)
+}
+
+#[derive(serde::Serialize)]
+pub struct FileTypeStates {
+    /// The extensions (from the list asked about) whose "Open with" lists NotePad-MD.
+    registered: Vec<String>,
+    /// Which copy the shared "Open with" entry opens: "us", "other" (another copy that exists),
+    /// "stale" (a copy that was moved or deleted) or "none".
+    owner: String,
+    other_exe: Option<String>,
+}
+
+/// The real registration state of each extension, read from the registry every time.
+#[tauri::command]
+pub fn cmd_file_type_states(exts: Vec<String>) -> Result<FileTypeStates, String> {
+    let exe = exe_path()?.to_string_lossy().to_string();
+    let root = classes_root()?;
+    let cmd = read_command(&root, &format!("{}\\shell\\open", PROG_ID));
+    let (owner, other_exe) = match (&cmd, owner_of(cmd.clone(), &exe)) {
+        (None, _) => ("none", None),
+        (Some(_), Owner::Us) => ("us", None),
+        (Some(_), Owner::Other(p)) => ("other", Some(p)),
+        (Some(c), Owner::Stale) => ("stale", command_exe(c)),
+    };
+    let registered = exts
+        .iter()
+        .map(|e| e.trim_start_matches('.').to_ascii_lowercase())
+        .filter(|e| valid_ext(e) && ext_registered(&root, e))
+        .collect();
+    Ok(FileTypeStates { registered, owner: owner.into(), other_exe })
+}
+
+#[derive(serde::Serialize)]
+pub struct FileTypeChange {
+    changed: usize,
+    /// (extension, reason) for each one that could not be changed.
+    failed: Vec<(String, String)>,
+}
+
+/// Adds (`enabled`) or removes NotePad-MD from the "Open with" list of the given extensions.
+/// Only NotePad-MD's own value under `.ext\OpenWithProgids` changes, so the extension's default
+/// program (for .bat, .cmd, .ps1, .py, .js: running the script) is never touched. Adding points the
+/// shared "Open with" entry at this copy; removing the last extension (of `all`) removes that entry
+/// too, unless it belongs to another copy that still exists. Explorer is told once per call.
+#[tauri::command]
+pub fn cmd_set_file_types(exts: Vec<String>, enabled: bool, all: Vec<String>) -> Result<FileTypeChange, String> {
+    let exe = exe_path()?;
+    let exe_s = exe.to_string_lossy().to_string();
+    let root = classes_root()?;
+    let app_key = format!("Applications\\{}", exe_file_name(&exe));
+    let norm = |v: &Vec<String>| -> Vec<String> { v.iter().map(|e| e.trim_start_matches('.').to_ascii_lowercase()).filter(|e| valid_ext(e)).collect() };
+    let exts = norm(&exts);
+    let mut failed = Vec::new();
+    let mut changed = 0;
+    if enabled {
+        let cmd = open_command(&exe_s);
+        let (prog, _) = err(root.create_subkey(PROG_ID))?;
+        err(prog.set_value("", &"NotePad-MD document"))?;
+        err(err(prog.create_subkey("DefaultIcon"))?.0.set_value("", &format!("\"{}\",0", exe_s)))?;
+        err(err(prog.create_subkey("shell\\open\\command"))?.0.set_value("", &cmd))?;
+        let (app, _) = err(root.create_subkey(&app_key))?;
+        err(app.set_value("FriendlyAppName", &"NotePad-MD"))?;
+        err(err(app.create_subkey("shell\\open\\command"))?.0.set_value("", &cmd))?;
+        let (types, _) = err(app.create_subkey("SupportedTypes"))?;
+        for ext in &exts {
+            let dot = format!(".{}", ext);
+            let r = types
+                .set_value(&dot, &"")
+                .and_then(|_| root.create_subkey(format!("{}\\OpenWithProgids", dot)))
+                .and_then(|(k, _)| k.set_value(PROG_ID, &""));
+            match r {
+                Ok(()) => changed += 1,
+                Err(e) => failed.push((ext.clone(), e.to_string())),
+            }
+        }
+    } else {
+        if let Owner::Other(p) = owner_of(read_command(&root, &format!("{}\\shell\\open", PROG_ID)), &exe_s) {
+            return Err(format!("These file types are registered to another copy of NotePad-MD:\n{}\n\nChange them from that copy.", p));
+        }
+        let types = root.open_subkey_with_flags(format!("{}\\SupportedTypes", app_key), KEY_ALL_ACCESS).ok();
+        for ext in &exts {
+            let mut r: Result<(), String> = Ok(());
+            if let Ok(k) = root.open_subkey_with_flags(format!(".{}\\OpenWithProgids", ext), KEY_ALL_ACCESS) {
+                match k.delete_value(PROG_ID) {
+                    Ok(()) => {}
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                    Err(e) => r = Err(e.to_string()),
+                }
+            }
+            if let Some(t) = &types {
+                let _ = t.delete_value(format!(".{}", ext));
+            }
+            match r {
+                Ok(()) => changed += 1,
+                Err(e) => failed.push((ext.clone(), e)),
+            }
+        }
+        // Nothing left: remove the shared entry as well (it only ever pointed at this copy here).
+        if !norm(&all).iter().any(|e| ext_registered(&root, e)) {
+            if !matches!(owner_of(read_command(&root, &format!("{}\\shell\\open", app_key)), &exe_s), Owner::Other(_)) {
+                delete_tree(&root, &app_key)?;
+            }
+            delete_tree(&root, PROG_ID)?;
+        }
+    }
+    notify_assoc_changed();
+    Ok(FileTypeChange { changed, failed })
+}
+
 /* ---------------- Explorer right-click "Edit in NotePad-MD" ---------------- */
 
 /// A classic shell verb on every file type (`*`), per user. On Windows 11 classic verbs appear
@@ -599,6 +716,26 @@ mod tests {
         root.open_subkey_with_flags(format!("{}\\shell\\open\\command", PROG_ID), KEY_ALL_ACCESS).unwrap().set_value("", &open_command("C:\\Nowhere\\notepad-md.exe")).unwrap();
         cmd_unregister_file_types(exts).unwrap();
         assert!(root.open_subkey(PROG_ID).is_err());
+
+        // One extension at a time (Settings > File Types), in the same throwaway key.
+        let all = vec!["md".to_string(), "bat".to_string(), "json".to_string()];
+        let s = cmd_file_type_states(all.clone()).unwrap();
+        assert!(s.registered.is_empty() && s.owner == "none");
+        let r = cmd_set_file_types(vec!["bat".into()], true, all.clone()).unwrap();
+        assert_eq!((r.changed, r.failed.len()), (1, 0));
+        let s = cmd_file_type_states(all.clone()).unwrap();
+        assert_eq!((s.registered.clone(), s.owner.as_str()), (vec!["bat".to_string()], "us"));
+        assert_eq!(root.open_subkey(".bat").unwrap().get_value::<String, _>("").unwrap(), "batfile", ".bat still runs as before");
+        cmd_set_file_types(vec!["md".into(), "json".into()], true, all.clone()).unwrap();
+        assert_eq!(cmd_file_type_states(all.clone()).unwrap().registered.len(), 3);
+        cmd_set_file_types(vec!["bat".into()], false, all.clone()).unwrap();
+        let s = cmd_file_type_states(all.clone()).unwrap();
+        assert_eq!(s.registered, vec!["md".to_string(), "json".to_string()]);
+        assert!(root.open_subkey(PROG_ID).is_ok(), "shared entry kept while others are registered");
+        assert_eq!(root.open_subkey(".bat").unwrap().get_value::<String, _>("").unwrap(), "batfile");
+        cmd_set_file_types(all.clone(), false, all.clone()).unwrap();
+        assert!(cmd_file_type_states(all.clone()).unwrap().registered.is_empty());
+        assert!(root.open_subkey(PROG_ID).is_err(), "last one removed: shared entry removed too");
 
         drop(root);
         hkcu.delete_subkey_all(&test_root).unwrap();

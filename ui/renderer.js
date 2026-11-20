@@ -51,57 +51,145 @@ const MAX_FONT_SIZE = 40;
 //         'code' = read-only coloured source).
 // prose:  spellchecked, and opens in Preview Only by default.
 // hljs:   highlight.js grammar used to colour the editor.
+/* Every language a tab can be shown as. `group` sorts View > Language and the status-bar menu,
+ * `validate` names the syntax check (Settings > Syntax Validation) and `exts` the Save As types.
+ * The ids must match the lang_* items of View > Language in src-tauri/src/main.rs. */
 const LANGS = {
-  markdown: { label: 'Markdown', hljs: 'markdown', prose: true, render: 'markdown', exts: ['md', 'markdown'] },
-  plaintext: { label: 'Plain Text', hljs: null, prose: true, render: 'markdown', exts: ['txt'] },
-  bbcode: { label: 'BBCode', hljs: 'bbcode', prose: true, render: 'bbcode', exts: ['bbcode', 'bb'] },
-  log: { label: 'Log File', hljs: 'logfile', render: 'code', exts: ['txt', 'log'] }, // colours levels, times, ids
-  xml: { label: 'XML', hljs: 'xml', render: 'code', exts: ['xml'] },
-  html: { label: 'HTML', hljs: 'xml', render: 'code', exts: ['html', 'htm'] },
-  yaml: { label: 'YAML', hljs: 'yaml', render: 'code', exts: ['yml', 'yaml'] },
-  json: { label: 'JSON', hljs: 'json', render: 'code', exts: ['json'] },
-  ini: { label: 'INI', hljs: 'ini', render: 'code', exts: ['ini'] },
-  toml: { label: 'TOML', hljs: 'ini', render: 'code', exts: ['toml'] },
-  python: { label: 'Python', hljs: 'python', render: 'code', exts: ['py'] },
-  javascript: { label: 'JavaScript', hljs: 'javascript', render: 'code', exts: ['js'] },
-  powershell: { label: 'PowerShell', hljs: 'powershell', render: 'code', exts: ['ps1'] },
-  dos: { label: 'MS-DOS Batch', hljs: 'dos', render: 'code', exts: ['bat', 'cmd'] },
-  php: { label: 'PHP', hljs: 'php', render: 'code', exts: ['php'] },
-  java: { label: 'Java', hljs: 'java', render: 'code', exts: ['java'] },
-  css: { label: 'CSS', hljs: 'css', render: 'code', exts: ['css'] },
-  c: { label: 'C', hljs: 'c', render: 'code', exts: ['c', 'h'] },
-  csharp: { label: 'C#', hljs: 'csharp', render: 'code', exts: ['cs'] },
-  cpp: { label: 'C++', hljs: 'cpp', render: 'code', exts: ['cpp', 'hpp'] },
+  markdown: { label: 'Markdown', hljs: 'markdown', prose: true, render: 'markdown', exts: ['md', 'markdown'], group: 'text' },
+  plaintext: { label: 'Plain Text', hljs: null, prose: true, render: 'markdown', exts: ['txt'], group: 'text' },
+  bbcode: { label: 'BBCode', hljs: 'bbcode', prose: true, render: 'bbcode', exts: ['bbcode', 'bb'], group: 'text' },
+  log: { label: 'Log File', hljs: 'logfile', render: 'code', exts: ['log', 'txt'], group: 'text' }, // colours levels, times, ids
+  xml: { label: 'XML', hljs: 'xml', render: 'code', exts: ['xml'], group: 'data', validate: 'xml' },
+  html: { label: 'HTML', hljs: 'xml', render: 'code', exts: ['html', 'htm'], group: 'data' },
+  css: { label: 'CSS', hljs: 'css', render: 'code', exts: ['css'], group: 'data', validate: 'css' },
+  json: { label: 'JSON', hljs: 'json', render: 'code', exts: ['json'], group: 'data', validate: 'json' },
+  jsonc: { label: 'JSON with Comments', hljs: 'json', render: 'code', exts: ['jsonc'], group: 'data', validate: 'jsonc' },
+  json5: { label: 'JSON5', hljs: 'json', render: 'code', exts: ['json5'], group: 'data', validate: 'json5' },
+  jsonl: { label: 'JSON Lines', hljs: 'json', render: 'code', exts: ['jsonl', 'ndjson'], group: 'data', validate: 'jsonl' },
+  yaml: { label: 'YAML', hljs: 'yaml', render: 'code', exts: ['yml', 'yaml'], group: 'data', validate: 'yaml' },
+  toml: { label: 'TOML', hljs: 'ini', render: 'code', exts: ['toml'], group: 'data', validate: 'toml' },
+  sql: { label: 'SQL', hljs: 'sql', render: 'code', exts: ['sql'], group: 'data' },
+  diff: { label: 'Diff / Patch', hljs: 'diff', render: 'code', exts: ['diff', 'patch'], group: 'data' },
+  bash: { label: 'Shell / Bash', hljs: 'bash', render: 'code', exts: ['sh', 'bash'], group: 'scripts', validate: 'bash' },
+  powershell: { label: 'PowerShell', hljs: 'powershell', render: 'code', exts: ['ps1'], group: 'scripts', validate: 'powershell' },
+  dos: { label: 'MS-DOS Batch', hljs: 'dos', render: 'code', exts: ['bat', 'cmd'], group: 'scripts' },
+  python: { label: 'Python', hljs: 'python', render: 'code', exts: ['py'], group: 'scripts', validate: 'python' },
+  javascript: { label: 'JavaScript', hljs: 'javascript', render: 'code', exts: ['js'], group: 'scripts', validate: 'javascript' },
+  php: { label: 'PHP', hljs: 'php', render: 'code', exts: ['php'], group: 'scripts' },
+  perl: { label: 'Perl', hljs: 'perl', render: 'code', exts: ['pl', 'pm'], group: 'scripts' },
+  ruby: { label: 'Ruby', hljs: 'ruby', render: 'code', exts: ['rb'], group: 'scripts' },
+  awk: { label: 'AWK (no colouring)', hljs: null, render: 'code', exts: ['awk'], group: 'scripts' },
+  sed: { label: 'sed (no colouring)', hljs: null, render: 'code', exts: ['sed'], group: 'scripts' },
+  ini: { label: 'INI', hljs: 'ini', render: 'code', exts: ['ini'], group: 'config', validate: 'ini' },
+  env: { label: 'Environment (.env)', hljs: 'dotenv', render: 'code', exts: ['env'], group: 'config', validate: 'env' },
+  systemd: { label: 'systemd Unit', hljs: 'ini', render: 'code', exts: ['service'], group: 'config', validate: 'systemd' },
+  desktop: { label: 'Desktop Entry', hljs: 'ini', render: 'code', exts: ['desktop'], group: 'config', validate: 'desktop' },
+  compose: { label: 'Docker Compose', hljs: 'yaml', render: 'code', exts: ['yaml', 'yml'], group: 'config', validate: 'compose' },
+  dockerfile: { label: 'Dockerfile', hljs: 'dockerfile', render: 'code', exts: ['dockerfile'], group: 'config', validate: 'dockerfile' },
+  makefile: { label: 'Makefile', hljs: 'makefile', render: 'code', exts: ['mk', 'mak'], group: 'config' },
+  nginx: { label: 'NGINX', hljs: 'nginx', render: 'code', exts: ['conf'], group: 'config', validate: 'nginx' },
+  apache: { label: 'Apache (.htaccess)', hljs: 'apache', render: 'code', exts: ['htaccess', 'conf'], group: 'config', validate: 'apache' },
+  hcl: { label: 'HCL / Terraform', hljs: 'hcl', render: 'code', exts: ['tf', 'hcl', 'tfvars'], group: 'config', validate: 'hcl' },
+  ignore: { label: 'Ignore File (.gitignore)', hljs: 'ignorefile', render: 'code', exts: ['gitignore'], group: 'config' },
+  requirements: { label: 'pip Requirements', hljs: null, render: 'code', exts: ['txt'], group: 'config' },
+  cmake: { label: 'CMake (no colouring)', hljs: null, render: 'code', exts: ['cmake'], group: 'config' },
+  htpasswd: { label: 'Password File (.htpasswd)', hljs: null, render: 'code', exts: ['htpasswd'], group: 'config' },
+  pem: { label: 'Certificate / Key (PEM)', hljs: 'pem', render: 'code', exts: ['pem', 'crt', 'cer', 'csr', 'pub', 'asc'], group: 'security' },
+  java: { label: 'Java', hljs: 'java', render: 'code', exts: ['java'], group: 'code' },
+  groovy: { label: 'Groovy / Jenkinsfile', hljs: 'java', render: 'code', exts: ['groovy'], group: 'code' },
+  c: { label: 'C', hljs: 'c', render: 'code', exts: ['c', 'h'], group: 'code' },
+  cpp: { label: 'C++', hljs: 'cpp', render: 'code', exts: ['cpp', 'hpp'], group: 'code' },
+  csharp: { label: 'C#', hljs: 'csharp', render: 'code', exts: ['cs'], group: 'code' },
 };
 
+const LANG_GROUPS = [
+  ['text', 'Text'],
+  ['data', 'Web and Data'],
+  ['scripts', 'Scripts'],
+  ['config', 'Configuration'],
+  ['code', 'Programming'],
+  ['security', 'Certificates and Keys'],
+];
+
+/* The single list of file extensions: language detection, File > Open filters and the
+ * Settings > File Types registration list all come from here. */
 const EXT_LANG = {
   md: 'markdown', markdown: 'markdown', mdown: 'markdown', mkd: 'markdown',
-  txt: 'plaintext', text: 'plaintext', log: 'plaintext',
+  txt: 'plaintext', text: 'plaintext', log: 'log',
   bbcode: 'bbcode', bb: 'bbcode',
-  xml: 'xml', xsd: 'xml', xsl: 'xml', xslt: 'xml', svg: 'xml', config: 'xml', csproj: 'xml', resx: 'xml', plist: 'xml',
-  html: 'html', htm: 'html', xhtml: 'html',
+  xml: 'xml', xsd: 'xml', xsl: 'xml', xslt: 'xml', xhtml: 'xml', svg: 'xml', config: 'xml', csproj: 'xml', resx: 'xml', plist: 'xml',
+  html: 'html', htm: 'html',
   yml: 'yaml', yaml: 'yaml',
-  json: 'json', jsonc: 'json', json5: 'json',
-  ini: 'ini', cfg: 'ini', conf: 'ini', inf: 'ini', properties: 'ini',
+  json: 'json', jsonc: 'jsonc', json5: 'json5', jsonl: 'jsonl', ndjson: 'jsonl',
+  ini: 'ini', cfg: 'ini', conf: 'ini', inf: 'ini', properties: 'ini', editorconfig: 'ini',
   toml: 'toml',
+  sql: 'sql',
+  diff: 'diff', patch: 'diff',
+  sh: 'bash', bash: 'bash', zsh: 'bash', ksh: 'bash', fish: 'bash',
   py: 'python', pyw: 'python',
   js: 'javascript', mjs: 'javascript', cjs: 'javascript',
   ps1: 'powershell', psm1: 'powershell', psd1: 'powershell',
   bat: 'dos', cmd: 'dos',
   php: 'php', phtml: 'php',
+  pl: 'perl', pm: 'perl',
+  rb: 'ruby',
+  awk: 'awk',
+  sed: 'sed',
+  env: 'env',
+  service: 'systemd', timer: 'systemd', socket: 'systemd', mount: 'systemd', target: 'systemd', network: 'systemd', netdev: 'systemd', link: 'systemd',
+  desktop: 'desktop',
+  dockerfile: 'dockerfile',
+  mk: 'makefile', mak: 'makefile',
+  hcl: 'hcl', tf: 'hcl', tfvars: 'hcl',
+  pem: 'pem', crt: 'pem', cer: 'pem', csr: 'pem', pub: 'pem', asc: 'pem',
   java: 'java',
+  groovy: 'groovy',
   css: 'css',
   c: 'c', h: 'c',
   cs: 'csharp', csx: 'csharp',
   cpp: 'cpp', cc: 'cpp', cxx: 'cpp', hpp: 'cpp', hh: 'cpp', hxx: 'cpp', inl: 'cpp', ino: 'cpp',
 };
 
+/* Files recognised by their whole name (lower case). These win over the extension, and are never
+ * registered with Windows (they aren't extensions). */
+const FILENAME_LANG = {
+  dockerfile: 'dockerfile', containerfile: 'dockerfile',
+  makefile: 'makefile', gnumakefile: 'makefile',
+  jenkinsfile: 'groovy',
+  vagrantfile: 'ruby', gemfile: 'ruby', rakefile: 'ruby',
+  pipfile: 'toml',
+  '.env': 'env',
+  '.bashrc': 'bash', '.bash_profile': 'bash', '.bash_aliases': 'bash', '.bash_logout': 'bash', '.profile': 'bash', '.zshrc': 'bash', '.zprofile': 'bash', '.zshenv': 'bash',
+  '.gitignore': 'ignore', '.dockerignore': 'ignore', '.gitattributes': 'ignore', '.npmignore': 'ignore',
+  '.gitmodules': 'ini', '.gitconfig': 'ini', '.editorconfig': 'ini',
+  '.htaccess': 'apache', 'httpd.conf': 'apache', 'apache2.conf': 'apache',
+  '.htpasswd': 'htpasswd',
+  'nginx.conf': 'nginx',
+  'requirements.txt': 'requirements',
+  'cmakelists.txt': 'cmake',
+  'compose.yaml': 'compose', 'compose.yml': 'compose', 'docker-compose.yaml': 'compose', 'docker-compose.yml': 'compose',
+  'log.txt': 'log',
+};
+
+/* Name patterns, checked after the exact names and before the extension. */
+const FILENAME_PATTERNS = [
+  [/^(?:dockerfile|containerfile)\..+$/, 'dockerfile'],
+  [/^\.env\..+$/, 'env'],
+  [/^(?:docker-)?compose\..+\.ya?ml$/, 'compose'],
+  [/^requirements[-_.].*\.txt$/, 'requirements'],
+];
+
 function langForPath(p) {
   if (!p) return 'markdown';
-  // A file named exactly log.txt (any case) is a log; every other .txt stays plain text.
-  if (/(^|[\\/])log\.txt$/i.test(p)) return 'log';
-  const m = /\.([^.\\/]+)$/.exec(p);
-  return (m && EXT_LANG[m[1].toLowerCase()]) || 'plaintext';
+  const parts = p.split(/[\\/]/);
+  const name = parts[parts.length - 1].toLowerCase();
+  if (FILENAME_LANG[name]) return FILENAME_LANG[name];
+  for (const [re, lang] of FILENAME_PATTERNS) if (re.test(name)) return lang;
+  // NGINX keeps its sites and snippets in an nginx folder: *.conf there (or no extension in sites-*).
+  const dirs = parts.slice(0, -1).map((d) => d.toLowerCase());
+  if (dirs.includes('nginx') && (/\.conf$/.test(name) || /^sites-(?:available|enabled)$/.test(dirs[dirs.length - 1] || ''))) return 'nginx';
+  const m = /\.([^.\\/]+)$/.exec(name);
+  return (m && EXT_LANG[m[1]]) || 'plaintext';
 }
 
 function langInfo(doc) {
@@ -115,6 +203,12 @@ function isProse(doc) {
 /** Only Markdown-rendered documents have an editable preview that writes back to the source. */
 function isMarkdownPreview(doc) {
   return langInfo(doc).render === 'markdown';
+}
+
+/** Previews you can type into: Markdown, and BBCode (turned back into BBCode as you type). */
+function isEditablePreview(doc) {
+  const r = langInfo(doc).render;
+  return r === 'markdown' || r === 'bbcode';
 }
 
 function defaultLayoutFor(lang) {
@@ -489,7 +583,7 @@ function updateLineNumbers() {
   const digits = Math.max(3, String(count).length);
   if (lineNumbersEl.dataset.digits !== String(digits)) {
     lineNumbersEl.dataset.digits = String(digits);
-    lineNumbersEl.style.width = 'calc(' + digits + 'ch + 12px + var(--bm-margin))';
+    lineNumbersEl.style.width = 'calc(' + digits + 'ch + 12px + var(--bm-margin) + var(--diag-margin, 0px))';
   }
   renderGutter();
 }
@@ -544,17 +638,25 @@ function renderGutter() {
   if (!lineNumbersVisible) return;
   const doc = getActive();
   const bms = (doc && doc.bookmarks) || {};
+  // Syntax problems get a marker left of the number (room kept for checked languages, so nothing shifts).
+  const diagCol = !!doc && gutterHasDiagColumn(doc);
+  const dm = diagCol ? '15px' : '0px';
+  if (lineNumbersEl.style.getPropertyValue('--diag-margin') !== dm) lineNumbersEl.style.setProperty('--diag-margin', dm);
+  const diags = diagCol ? diagnosticLines(doc) : new Map();
   const html = [];
   for (const r of gutterRowsInView()) {
     const bm = bms[r.line];
     const cls = bm ? ' bm-' + bm.toLowerCase() : '';
+    const d = diags.get(r.line);
     html.push(
       '<div class="ln-row' + (bm ? ' ln-bm' + cls : '') + '" data-l="' + r.line + '" style="top:' + r.top.toFixed(1) + 'px;height:' + r.height.toFixed(1) + 'px">' +
+        (d ? '<span class="ln-d ' + d + '" aria-label="' + d + '"></span>' : '') +
         '<span class="ln-n">' + (r.line + 1) + '</span><span class="ln-m' + cls + '"></span></div>'
     );
   }
   lineNumbersEl.innerHTML = html.join('');
-  lineNumbersEl.dataset.colour = (settings.bookmarkColour || 'Green').toLowerCase();
+  const colour = (settings.bookmarkColour || 'Green').toLowerCase();
+  if (lineNumbersEl.dataset.colour !== colour) lineNumbersEl.dataset.colour = colour;
 }
 
 /** The line a mouse event in the gutter points at (null below the last line). */
@@ -1637,7 +1739,7 @@ function renderPreview(doc) {
   const kept = doc.previewStash;
   doc.previewStash = null;
   if (kept && kept.content === doc.content && kept.path === doc.path && kept.render === mode && kept.gen === stashRenderGen) {
-    preview.setAttribute('contenteditable', mode === 'markdown' ? 'true' : 'false');
+    preview.setAttribute('contenteditable', mode === 'markdown' || mode === 'bbcode' ? 'true' : 'false');
     preview.replaceChildren(kept.frag);
     schedulePreviewSpell(0);
     if (typeof refreshPreviewFindHighlights === 'function') refreshPreviewFindHighlights(false);
@@ -1653,7 +1755,7 @@ function renderPreview(doc) {
     addCodeCopyButtons();
     ensureTrailingParagraph();
   } else if (mode === 'bbcode') {
-    preview.setAttribute('contenteditable', 'false');
+    preview.setAttribute('contenteditable', 'true'); // typing here writes BBCode back to the source
     preview.innerHTML = renderBBCode(doc.content);
     addCodeCopyButtons();
   } else {
@@ -1737,8 +1839,8 @@ function syncFromEditor() {
 
 function syncFromPreview() {
   const doc = getActive();
-  if (!doc || !isMarkdownPreview(doc)) return;
-  doc.content = turndownService.turndown(preview.innerHTML);
+  if (!doc || !isEditablePreview(doc)) return;
+  doc.content = isMarkdownPreview(doc) ? turndownService.turndown(preview.innerHTML) : htmlToBBCode(preview);
   editor.value = doc.content;
   addCodeCopyButtons();
   markDirty(doc);
@@ -1830,8 +1932,12 @@ function showLanguageMenu(anchor) {
     { label: 'Auto-detect from file extension (' + LANGS[auto].label + ')', checked: !doc.langOverride && doc.lang === auto, action: () => setDocLanguage(null) },
     'sep',
   ];
-  for (const [key, info] of Object.entries(LANGS)) {
-    items.push({ label: info.label + (info.render === 'markdown' ? '  (Markdown preview)' : info.render === 'bbcode' ? '  (BBCode preview)' : ''), checked: doc.lang === key, action: () => setDocLanguage(key) });
+  const entry = (key, info) => ({ label: info.label + (info.render === 'markdown' ? '  (Markdown preview)' : info.render === 'bbcode' ? '  (BBCode preview)' : ''), checked: doc.lang === key, action: () => setDocLanguage(key) });
+  // Text formats at the top level; the rest in one submenu per group.
+  for (const [g, title] of LANG_GROUPS) {
+    const list = Object.entries(LANGS).filter(([, info]) => info.group === g);
+    if (g === 'text') for (const [key, info] of list) items.push(entry(key, info));
+    else items.push({ label: title + (list.some(([key]) => key === doc.lang) ? '  ·  ' + LANGS[doc.lang].label : ''), checked: list.some(([key]) => key === doc.lang), submenu: list.map(([key, info]) => entry(key, info)) });
   }
   showContextMenu(x, y, items);
   // Open upwards from the status bar.
@@ -1886,6 +1992,9 @@ function updateStatusBar() {
   if (!doc) return;
   statusFile.textContent = doc.path || tabTitle(doc);
   statusDirty.textContent = doc.dirty ? '• Modified' : '';
+  scheduleValidation(doc); // after a pause; nothing to do if this text was already checked
+  updateToolbarForLanguage(doc);
+  updateDiagStatus();
   statusLayout.textContent = layoutLabels[layoutMode];
   const enc = { utf8: 'UTF-8', utf8bom: 'UTF-8 BOM', utf16le: 'UTF-16 LE', utf16be: 'UTF-16 BE', latin1: 'ANSI' }[doc.encoding] || 'UTF-8';
   statusLang.textContent = langInfo(doc).label;
@@ -2190,6 +2299,7 @@ function setActiveTab(id) {
   stashPanes(getActive());
   activeId = id;
   findState.navLine = null;
+  hideDiagnosticPopup();
   renderTabs();
   loadActiveDocIntoPanes();
   if (!findBar.classList.contains('hidden')) {
@@ -2760,11 +2870,15 @@ function checklistPreview() {
 
 /** Toolbar commands act on the preview only when it is the editable Markdown preview. */
 function previewTarget() {
-  return lastFocused === 'preview' && isMarkdownPreview(getActive());
+  return lastFocused === 'preview' && isEditablePreview(getActive());
 }
 
 function applyHeading(level) {
-  if (previewTarget()) {
+  const bb = langInfo(getActive()).render === 'bbcode';
+  if (bb && level > 3) return; // BBCode has [h1] to [h3]
+  if (bb && !previewTarget()) {
+    bbToolbarCommand(null, level);
+  } else if (previewTarget()) {
     previewExec('formatBlock', '<h' + level + '>');
   } else {
     transformEditorLines((l) => '#'.repeat(level) + ' ' + l.replace(/^#{1,6}\s*/, ''));
@@ -2916,6 +3030,15 @@ async function insertImage() {
 
 function runToolbarCommand(cmd) {
   const pv = previewTarget();
+  // BBCode tabs: the editor gets BBCode tags; in the preview, only what BBCode has.
+  if (langInfo(getActive()).render === 'bbcode') {
+    if (!pv && bbToolbarCommand(cmd)) return;
+    if (pv && cmd === 'checklist') return flashFindStatus('BBCode has no checklists: use a list instead.');
+    if (pv && cmd === 'image') {
+      previewExec('insertText', '[img]https://[/img]');
+      return;
+    }
+  }
   switch (cmd) {
     case 'undo':
       document.execCommand('undo');
@@ -3144,7 +3267,10 @@ function wireDomEvents() {
   });
   sidebarEl.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-layout]');
-    if (btn) setLayoutMode(btn.dataset.layout);
+    if (btn) {
+      setLayoutMode(btn.dataset.layout);
+      focusForTyping(); // ready to type in the view just chosen
+    }
   });
 
   // Mouse wheel over the tabs steps exactly like the ‹ › buttons (touchpads scroll smoothly).
@@ -3236,6 +3362,7 @@ function wireDomEvents() {
 
   wireFind();
   wireGutter();
+  wireDiagnostics();
 
   // Alt pressed and released on its own (nothing else in between), while the menu bar is switched
   // off, shows it until a command is picked from it; Alt again, a click or another key hides it.
@@ -3291,6 +3418,11 @@ function wireDomEvents() {
       stepMatch(e.shiftKey ? -1 : 1);
       return;
     }
+    if (e.key === 'F8' && noMods) {
+      e.preventDefault();
+      gotoDiagnostic(e.shiftKey ? -1 : 1);
+      return;
+    }
     if (e.key === 'F2' && !e.altKey && !e.metaKey) {
       e.preventDefault();
       if (e.ctrlKey && !e.shiftKey) toggleBookmarkAtCaret();
@@ -3316,6 +3448,7 @@ function wireDomEvents() {
       if (mode) {
         e.preventDefault();
         setLayoutMode(mode);
+        focusForTyping();
       } else if (e.code === 'KeyS' && !e.shiftKey) {
         e.preventDefault();
         saveAll();
@@ -3503,10 +3636,12 @@ function wireMenuListeners() {
   listen('menu-preview-markdown', () => setPreviewMode('markdown'));
   listen('menu-preview-bbcode', () => setPreviewMode('bbcode'));
   listen('menu-language-menu', () => showLanguageMenu(settings.statusBar ? statusLang : null));
-  listen('menu-layout-preview-only', () => setLayoutMode('preview-only'));
-  listen('menu-layout-edit-only', () => setLayoutMode('edit-only'));
-  listen('menu-layout-preview-left', () => setLayoutMode('split-pe'));
-  listen('menu-layout-edit-left', () => setLayoutMode('split-ep'));
+  for (const [ev, mode] of [['preview-only', 'preview-only'], ['edit-only', 'edit-only'], ['preview-left', 'split-pe'], ['edit-left', 'split-ep']]) {
+    listen('menu-layout-' + ev, () => {
+      setLayoutMode(mode);
+      focusForTyping();
+    });
+  }
   listen('menu-toggle-line-numbers', () => toggleLineNumbers());
   listen('menu-find-replace', () => openFindBar());
   listen('menu-find-advanced', () => openFindBar(true));
@@ -3527,6 +3662,9 @@ function wireMenuListeners() {
   listen('menu-bookmark-remove-others', () => bookmarkedLinesAction('remove-others'));
   listen('menu-bookmark-inverse', () => bookmarkedLinesAction('inverse'));
   listen('menu-show-hidden', () => toggleHiddenChars());
+  listen('menu-diag-next', () => gotoDiagnostic(1));
+  listen('menu-diag-prev', () => gotoDiagnostic(-1));
+  listen('menu-diag-check', () => validateNow());
   listen('menu-peek-ended', () => (menuPeek = false));
   listen('menu-spell-toggle', () => toggleSpell());
   listen('menu-spell-en-gb', () => setSpellLang('en_GB'));
@@ -3541,6 +3679,7 @@ function wireMenuListeners() {
 async function init() {
   setupMarkdownEngine();
   registerLogLanguage();
+  registerConfigLanguages();
   const session = await loadSessionFile();
   applyUi(session && session.ui);
   wireDomEvents();

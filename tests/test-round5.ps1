@@ -70,9 +70,9 @@ $d2 = WaitDialog; Close-Dialogs | Out-Null; Start-Sleep -Milliseconds 600
 T 'Export... / Import... buttons open Save / Open dialogs' "export=$d1 import=$d2" ($d1 -and $d2)
 
 # ---------- register file types (throwaway registry key) ----------
-$r = J "await refreshFileTypeStatus(); return document.getElementById('ft-status').textContent"
-T 'File types: not registered at first' $r ($r -eq 'Not registered.')
-$r = J "await registerFileTypes(); return settingsMsg.textContent + '|' + document.getElementById('ft-status').textContent"
+$r = J "await refreshFileTypeStatus(); return ftCount.textContent"
+T 'File types: not registered at first' $r ($r -like '0 of * registered')
+$r = J "await setFileTypes(supportedExtensions(), true); return settingsMsg.textContent + '|' + ftCount.textContent"
 $root = "HKCU:\$TestReg"
 $exeReal = (Get-Item $Exe).FullName
 $cmd = (Get-ItemProperty "$root\NotepadMD.Document\shell\open\command" -ErrorAction SilentlyContinue).'(default)'
@@ -80,12 +80,12 @@ $mdProg = (Get-Item "$root\.md\OpenWithProgids" -ErrorAction SilentlyContinue).P
 $psProg = (Get-Item "$root\.ps1\OpenWithProgids" -ErrorAction SilentlyContinue).Property -contains 'NotepadMD.Document'
 $types = @((Get-Item "$root\Applications\notepad-md.exe\SupportedTypes" -ErrorAction SilentlyContinue).Property).Count
 $expected = [int](J "return supportedExtensions().length")
-T 'Register writes ProgID + Open-with entries for every type' "msg=$r cmd=$cmd md=$mdProg ps1=$psProg types=$types/$expected" ($cmd -eq "`"$exeReal`" `"%1`"" -and $mdProg -and $psProg -and $types -eq $expected -and $r -like "Registered $expected file types.|*Registered:*")
+T 'Register writes ProgID + Open-with entries for every type' "msg=$r cmd=$cmd md=$mdProg ps1=$psProg types=$types/$expected" ($cmd -eq "`"$exeReal`" `"%1`"" -and $mdProg -and $psProg -and $types -eq $expected -and $r -eq "Registered $expected file types.|$expected of $expected registered")
 $real = Test-Path 'HKCU:\Software\Classes\NotepadMD.Document'
 T 'Real file associations untouched by the test' "real ProgID exists=$real" (-not $real)
-$r = J "await unregisterFileTypes(); return document.getElementById('ft-status').textContent"
+$r = J "await setFileTypes(supportedExtensions(), false); return ftCount.textContent"
 $left = (Test-Path "$root\NotepadMD.Document") -or ((Get-Item "$root\.md\OpenWithProgids" -ErrorAction SilentlyContinue).Property -contains 'NotepadMD.Document') -or (Test-Path "$root\Applications\notepad-md.exe")
-T 'Unregister removes them again' "status=$r leftovers=$left" ($r -eq 'Not registered.' -and -not $left)
+T 'Unregister removes them again' "status=$r leftovers=$left" ($r -like '0 of * registered' -and -not $left)
 Shot 'settings-files'
 J "closeSettings(); return 1" | Out-Null
 
@@ -94,7 +94,7 @@ J "await openPath('$(P 'notes.md')'); setLayoutMode('split-ep'); return 1" | Out
 $r = J "return previewModeBtn.textContent + '|' + !!preview.querySelector('h1') + '|' + statusLang.textContent"
 T 'Markdown file: sidebar shows MD, preview is Markdown' $r ($r -eq 'MD|true|Markdown')
 $r = J "previewModeBtn.click(); await new Promise(r=>setTimeout(r,200)); const d=getActive(); return previewModeBtn.textContent + '|' + !!preview.querySelector('h1') + '|' + preview.textContent.includes('# Colour test') + '|' + statusLang.textContent + '|' + d.langOverride + '|' + preview.getAttribute('contenteditable')"
-T 'Sidebar button switches this tab to BBCode preview' $r ($r -eq 'BB|false|true|BBCode|true|false')
+T 'Sidebar button switches this tab to BBCode preview (which can be typed into)' $r ($r -eq 'BB|false|true|BBCode|true|true')
 Send-Key @('CTRL', 'ALT') 'm' 'KeyM' 0x4D
 T 'Ctrl+Alt+M back to Markdown preview' (J "return previewModeBtn.textContent + '|' + getActive().langOverride") ((J "return previewModeBtn.textContent + '|' + getActive().langOverride") -eq 'MD|false')
 Send-Key @('CTRL', 'ALT') 'b' 'KeyB' 0x42
@@ -173,7 +173,8 @@ if ($newProc) {
         $page = $targets | Where-Object { $_.type -eq 'page' } | Select-Object -First 1
         $script:ws = New-Object System.Net.WebSockets.ClientWebSocket
         $script:ws.ConnectAsync([Uri]$page.webSocketDebuggerUrl, [Threading.CancellationToken]::None).Wait()
-        Start-Sleep -Milliseconds 800
+        # Wait until the restarted page has loaded (startup takes a moment longer on a busy machine).
+        for ($k = 0; $k -lt 40 -and (Eval "typeof docs !== 'undefined' && docs.length > 0") -ne $true; $k++) { Start-Sleep -Milliseconds 250 }
         $r = J "return docs.map(d=>tabTitle(d)).join(',')"
         T 'Updated app reopened the tabs' $r ($r -like '*notes.md*forum.bbcode*data.json*')
     } catch { T 'Updated app reopened the tabs' "could not connect: $_" $false }

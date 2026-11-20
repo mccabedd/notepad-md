@@ -90,7 +90,7 @@ return JSON.stringify({lang:d.lang, tags: editorHighlight.querySelectorAll('.hlj
  badSize: preview.textContent.includes('[size=larrge]'), details: !!preview.querySelector('details'), status: statusLang.textContent});
 "@
 $o = $r | ConvertFrom-Json
-T 'BBCode: coloured editor, read-only preview' "lang=$($o.lang) tags=$($o.tags) editable=$($o.editable) status=$($o.status)" ($o.lang -eq 'bbcode' -and $o.tags -gt 5 -and $o.editable -eq 'false' -and $o.status -eq 'BBCode')
+T 'BBCode: coloured editor, editable preview' "lang=$($o.lang) tags=$($o.tags) editable=$($o.editable) status=$($o.status)" ($o.lang -eq 'bbcode' -and $o.tags -gt 5 -and $o.editable -eq 'true' -and $o.status -eq 'BBCode')
 T 'BBCode: formatting renders' "strong=$($o.strong) li=$($o.li) color=$($o.color) quote='$($o.quote)' details=$($o.details)" ($o.strong -and $o.li -eq 2 -and $o.color -and $o.quote -like 'Alice wrote:*Quoted text*' -and $o.details)
 T 'BBCode: only safe links' "hrefs=[$($o.link)]" ($o.link -eq 'https://example.com https://example.org')
 T 'BBCode: no HTML injection, code kept literal' "scripts=$($o.script) literal=$($o.scriptText) code='$($o.code)'" ($o.script -eq 0 -and $o.scriptText -and $o.code -eq 'if (a < b) { x = "<script>"; }')
@@ -141,7 +141,7 @@ const row=[...advRows.querySelectorAll('.adv-row')].find(r=>r.querySelector('.c-
 const rc=row.getBoundingClientRect(); return Math.round(rc.left+200)+','+Math.round(rc.top+10);
 "@
 $x, $y = $r.Split(','); Mouse 'mousePressed' ([int]$x) ([int]$y); Mouse 'mouseReleased' ([int]$x) ([int]$y); Wait1
-$r = J "const c=lineIndex(getActive()); return lineOf(c, editor.selectionStart)+1 + '|' + (editorHighlight.querySelector('.nav-line')||{}).textContent"
+$r = J "const c=lineIndex(getActive()); return lineOf(c, editor.selectionStart)+1 + '|' + [...editorHighlight.querySelectorAll('.nav-line')].map(e => e.textContent).join('')"
 T 'Clicking a row selects that line in the editor' $r ($r -eq '4|2024-10-14 14:30:05,431 ERROR Move Operation failed')
 
 # keyboard: Ctrl+Shift+B bookmarks, Down, Ctrl+C

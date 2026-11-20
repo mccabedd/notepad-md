@@ -47,7 +47,7 @@ T 'A word containing "02nd" is not accepted as correct' $r ($r -eq 'false')
 
 # ---------- big log: line numbers, find highlights ----------
 $r = J "const d = await openPath('$w/LOG.TXT'); setLayoutMode('edit-only'); if (!lineNumbersVisible) toggleLineNumbers(); await new Promise(r=>setTimeout(r,300)); editor.scrollTop = editor.scrollHeight; await new Promise(r=>setTimeout(r,300)); return JSON.stringify([lineNumbersEl.style.width, lineNumbersEl.scrollWidth <= lineNumbersEl.clientWidth])"
-T 'Line numbers: gutter fits 5-digit numbers' $r ($r -eq '["calc(5ch + 12px + var(--bm-margin))",true]')
+T 'Line numbers: gutter fits 5-digit numbers' $r ($r -eq '["calc(5ch + 12px + var(--bm-margin) + var(--diag-margin, 0px))",true]')
 foreach ($lang in 'log', 'plaintext') {
     $r = J "setDocLanguage('$lang'); await new Promise(r=>setTimeout(r,2500)); openFindBar(false); findInput.value='battery'; findInput.dispatchEvent(new Event('input')); for (let i=0;i<100 && !editorHighlight.querySelector('.find-hit');i++) await new Promise(r=>setTimeout(r,50)); return JSON.stringify([findState.matches.length, editorHighlight.querySelectorAll('.find-hit').length, $same])"
     T "Simple find highlights every hit in a 1 MB log ($lang)" $r ($r -eq '[4880,4880,true]')

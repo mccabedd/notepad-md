@@ -30,6 +30,15 @@ const DEFAULT_SETTINGS = {
   previewBg: '',
   showHidden: false, // View > Show Hidden Characters (spaces, tabs, line endings, invisible characters)
   bookmarkColour: 'Green', // colour a click in the bookmark margin (and Ctrl+F2) gives a line
+  settingsTab: 'general', // the Settings page shown last
+  validateEnabled: true, // syntax checks for JSON, YAML, TOML, XML...
+  validateAuto: true, // while editing (otherwise Search > Check Syntax Now)
+  validateDelay: 600, // ms after the last key
+  validateLarge: false, // also 1-5 MB files automatically
+  validateMarkers: true,
+  validateWarnings: true,
+  validateTooltips: true,
+  validateFixes: true,
 };
 
 let settings = { ...DEFAULT_SETTINGS };
@@ -60,6 +69,8 @@ function loadSettings(saved) {
   settings.previewFontSize = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(settings.previewFontSize)));
   if (![2, 4, 8].includes(settings.tabSize)) settings.tabSize = 4;
   if (!['Green', 'Orange', 'Red'].includes(settings.bookmarkColour)) settings.bookmarkColour = 'Green';
+  if (!['general', 'filetypes', 'validation'].includes(settings.settingsTab)) settings.settingsTab = 'general';
+  settings.validateDelay = Math.min(5000, Math.max(200, Math.round(settings.validateDelay)));
   settings.tabFontSize = clampTabFont(settings.tabFontSize);
 }
 
@@ -141,6 +152,7 @@ function applySettings() {
   renderEditorOverlay();
   updateLineNumbers();
   updateTabScrollButtons();
+  if (typeof getActive === 'function' && getActive()) updateStatusBar(); // syntax checks follow their settings
   if (typeof scheduleGridRender === 'function') scheduleGridRender();
 }
 
@@ -256,7 +268,8 @@ function openSettings() {
   syncSettingsForm();
   refreshFileTypeStatus();
   settingsEl.classList.remove('hidden');
-  const first = settingsEl.querySelector('select, input');
+  showSettingsTab(settings.settingsTab);
+  const first = settingsEl.querySelector('.modal-body > section:not([hidden]) select, .modal-body > section:not([hidden]) input');
   if (first) first.focus();
 }
 
@@ -445,24 +458,130 @@ async function importSettings() {
 /* ---------- file types ---------- */
 
 const ftStatus = document.getElementById('ft-status');
+const ftGrid = document.getElementById('ft-grid');
+const ftAll = document.getElementById('ft-all');
+const ftCount = document.getElementById('ft-count');
 
+/** Every registerable extension (from the one list in renderer.js); names like Dockerfile are not extensions. */
 function supportedExtensions() {
   return Object.keys(EXT_LANG).sort();
 }
 
+// Scripts Windows runs when you double-click them: registering only adds NotePad-MD to "Open with".
+const SCRIPT_EXTS = new Set(['bat', 'cmd', 'ps1', 'psm1', 'psd1', 'py', 'pyw', 'js', 'mjs', 'cjs', 'sh', 'vbs']);
+
+function buildFileTypeGrid() {
+  const exts = supportedExtensions();
+  // Filled down each column (alphabetical top to bottom, then the next column).
+  ftGrid.style.setProperty('--ft-rows', String(Math.ceil(exts.length / 3)));
+  ftGrid.innerHTML = exts
+    .map((e) => {
+      const tip = SCRIPT_EXTS.has(e) ? ' title="Adds NotePad-MD to Open with only. Double-clicking a .' + e + ' file still does what it did before."' : '';
+      return '<label class="check ft-item"' + tip + '><input type="checkbox" data-ext="' + e + '" /> .' + e + '</label>';
+    })
+    .join('');
+}
+
+function ftBoxes() {
+  return [...ftGrid.querySelectorAll('input[data-ext]')];
+}
+
+/** Ticks come from the registry itself, every time (also after changes made outside the app). */
 async function refreshFileTypeStatus() {
-  document.getElementById('ft-exts').textContent = 'Types: ' + supportedExtensions().map((e) => '.' + e).join(' ');
+  if (!ftGrid.children.length) buildFileTypeGrid();
+  const exts = supportedExtensions();
   try {
-    const s = await invoke('cmd_file_types_status');
-    ftStatus.textContent = s.registered
-      ? '✓ Registered: NotePad-MD appears in "Open with" for these file types.'
-      : s.other_exe
-      ? 'Registered for a different copy of the app (' + s.other_exe.replace(/ "%1"$/, '') + '). Click Register to point it at this one.'
-      : 'Not registered.';
+    const s = await invoke('cmd_file_type_states', { exts });
+    const reg = new Set(s.registered);
+    for (const box of ftBoxes()) box.checked = reg.has(box.dataset.ext);
+    ftAll.checked = reg.size === exts.length;
+    ftAll.indeterminate = reg.size > 0 && reg.size < exts.length;
+    ftCount.textContent = reg.size + ' of ' + exts.length + ' registered';
+    ftStatus.textContent =
+      s.owner === 'other'
+        ? 'These open another copy of NotePad-MD (' + s.other_exe + '). Ticking a type points Open with at this copy instead.'
+        : s.owner === 'stale'
+        ? 'These were registered by a copy that has been moved or deleted (' + s.other_exe + '). Ticking a type points them at this copy; unticking cleans them up.'
+        : '';
   } catch (e) {
-    ftStatus.textContent = 'Could not check registration: ' + e;
+    ftStatus.textContent = 'Could not read the registrations: ' + e;
   }
   await refreshContextMenuStatus();
+}
+
+let ftBusy = false;
+
+/** Applies a change straight away; the boxes then show what the registry really says. */
+async function setFileTypes(exts, enabled) {
+  if (ftBusy || !exts.length) return;
+  ftBusy = true;
+  const boxes = [...ftBoxes(), ftAll];
+  boxes.forEach((b) => (b.disabled = true));
+  settingsMessage((enabled ? 'Registering ' : 'Removing ') + (exts.length === 1 ? '.' + exts[0] : exts.length + ' file types') + '...');
+  try {
+    const r = await invoke('cmd_set_file_types', { exts, enabled, all: supportedExtensions() });
+    if (r.failed.length) settingsMessage('Could not change ' + r.failed.map(([e, why]) => '.' + e + ' (' + why + ')').join(', '), true);
+    else settingsMessage(exts.length === 1 ? '.' + exts[0] + (enabled ? ' now opens with NotePad-MD (Open with).' : ' no longer lists NotePad-MD.') : (enabled ? 'Registered ' : 'Removed ') + r.changed + ' file types.');
+  } catch (e) {
+    settingsMessage(String(e), true);
+  } finally {
+    boxes.forEach((b) => (b.disabled = false));
+    ftBusy = false;
+    await refreshFileTypeStatus();
+  }
+}
+
+function wireFileTypes() {
+  ftGrid.addEventListener('change', (e) => {
+    const box = e.target.closest('input[data-ext]');
+    if (!box) return;
+    e.stopPropagation(); // registry state, not a saved setting
+    const want = box.checked;
+    box.checked = !want; // shown only once Windows has the change
+    setFileTypes([box.dataset.ext], want);
+  });
+  ftAll.addEventListener('change', (e) => {
+    e.stopPropagation();
+    const want = ftAll.checked; // from "some" (indeterminate) a click means all
+    const exts = supportedExtensions().filter((x) => ftBoxes().find((b) => b.dataset.ext === x).checked !== want);
+    refreshFileTypeStatus(); // keep showing the real state while working
+    setFileTypes(exts, want);
+  });
+}
+
+/* ---------- Settings pages (General / File Types / Syntax Validation) ---------- */
+
+function showSettingsTab(tab, focusTab) {
+  if (!['general', 'filetypes', 'validation'].includes(tab)) tab = 'general';
+  for (const b of settingsEl.querySelectorAll('.settings-tabs [role="tab"]')) {
+    const on = b.dataset.tab === tab;
+    b.setAttribute('aria-selected', String(on));
+    b.tabIndex = on ? 0 : -1;
+    if (on && focusTab) b.focus();
+  }
+  for (const s of settingsEl.querySelectorAll('.modal-body > section')) s.hidden = (s.dataset.tab || 'general') !== tab;
+  document.getElementById('settings-body').scrollTop = 0;
+  if (settings.settingsTab !== tab) {
+    settings.settingsTab = tab;
+    scheduleSessionSave();
+  }
+}
+
+function wireSettingsTabs() {
+  const tabs = settingsEl.querySelector('.settings-tabs');
+  tabs.addEventListener('click', (e) => {
+    const b = e.target.closest('[role="tab"]');
+    if (b) showSettingsTab(b.dataset.tab, true);
+  });
+  // Arrow keys move between the pages (Windows tab-control style).
+  tabs.addEventListener('keydown', (e) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const list = [...tabs.querySelectorAll('[role="tab"]')];
+    const i = list.findIndex((b) => b.getAttribute('aria-selected') === 'true');
+    const j = e.key === 'Home' ? 0 : e.key === 'End' ? list.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + list.length) % list.length;
+    showSettingsTab(list[j].dataset.tab, true);
+  });
 }
 
 /* ---------- Explorer right-click "Edit in NotePad-MD" ---------- */
@@ -492,31 +611,11 @@ async function setContextMenu(enabled) {
   await refreshContextMenuStatus();
 }
 
-async function registerFileTypes() {
-  try {
-    const n = await invoke('cmd_register_file_types', { exts: supportedExtensions() });
-    settingsMessage('Registered ' + n + ' file types.');
-  } catch (e) {
-    settingsMessage('Registration failed: ' + e, true);
-  }
-  await refreshFileTypeStatus();
-}
-
-async function unregisterFileTypes() {
-  try {
-    await invoke('cmd_unregister_file_types', { exts: supportedExtensions() });
-    settingsMessage('File types unregistered.');
-  } catch (e) {
-    settingsMessage('Could not unregister: ' + e, true);
-  }
-  await refreshFileTypeStatus();
-}
-
 function wireSettings() {
   document.getElementById('settings-export').addEventListener('click', exportSettings);
   document.getElementById('settings-import').addEventListener('click', importSettings);
-  document.getElementById('ft-register').addEventListener('click', registerFileTypes);
-  document.getElementById('ft-unregister').addEventListener('click', unregisterFileTypes);
+  wireFileTypes();
+  wireSettingsTabs();
   ctxMenuBox.addEventListener('change', (e) => {
     e.stopPropagation(); // registry state, not a saved setting
     setContextMenu(ctxMenuBox.checked);
@@ -558,6 +657,7 @@ function onSettingInput(e) {
     if (isNaN(v)) return;
     if (key === 'tabFontSize') v = clampTabFont(parseFloat(el.value));
     if (key === 'newTabFontSize' || key === 'editFontSize' || key === 'previewFontSize') v = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, v));
+    if (key === 'validateDelay') v = Math.min(5000, Math.max(200, v));
   } else if (key === 'tabSize') v = parseInt(el.value, 10);
   else v = el.value;
   if (LIVE_SETTINGS[key]) {

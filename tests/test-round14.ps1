@@ -29,7 +29,7 @@ Start-Sleep -Milliseconds 500
 $r = J "return document.getElementById('about-version').textContent"
 T "About shows v$AppVersion" $r ($r -eq "v$AppVersion")
 $m = LangMenu
-T 'View > Language lists every language' $m ($m -eq 'Auto-detect from File Extension*|Markdown*|Plain Text|BBCode|Log File|HTML|XML|CSS|JavaScript|JSON|YAML|INI|TOML|Python|PowerShell|MS-DOS Batch|PHP|Java|C|C++|C#|')
+T 'View > Language lists every language' $m ($m -eq 'Auto-detect from File Name*|Markdown*|Plain Text|BBCode|Log File|Web and Data|Scripts|Configuration|Programming|Certificates and Keys|')
 
 # New tab, type HTML, View > Language > HTML (the menu click sends menu-lang-html)
 J "addDocAndActivate(newUntitledDoc()); setLayoutMode('preview-only'); return 1" | Out-Null
@@ -41,7 +41,8 @@ $r = J "return JSON.stringify([getActive().lang, editor.classList.contains('hl-a
 T 'View > Language > HTML colours the HTML in the editor' $r ($r -eq '["html",true,true,true,"HTML","edit-only"]')
 Start-Sleep -Milliseconds 300
 $m = LangMenu
-T 'The menu ticks HTML (not Auto-detect)' $m ($m -like 'Auto-detect from File Extension|Markdown|*|HTML*|XML|*')
+$h = J "return JSON.stringify([currentMenuChecks().lang_html, currentMenuChecks().lang_auto])"
+T 'The menu ticks HTML (not Auto-detect)' "$m $h" (($m -like 'Auto-detect from File Name|Markdown|*') -and $h -eq '[true,false]')
 J "await window.__TAURI__.event.emit('menu-lang-python'); await new Promise(r=>setTimeout(r,300)); return 1" | Out-Null
 $r = J "return getActive().lang + '|' + statusLang.textContent"
 T 'Any other language can be chosen the same way' $r ($r -eq 'python|Python')
@@ -72,7 +73,9 @@ T 'Log colours keep the editor text widths (no bold/italic)' $r ($r -eq '400|nor
 foreach ($n in 'notes.txt', 'mylog.txt', 'log.txt.bak', 'app.log') {
     Write-NoBom "$work\$n" $logText
     $r = J "await openPath('$w\\$n'); return getActive().lang"
-    T "$n stays as normal (plain text)" $r ($r -eq 'plaintext')
+    # Every .log file is a Log File (since the extended file types); other .txt files stay plain text.
+    $want = if ($n -like '*.log') { 'log' } else { 'plaintext' }
+    T "$n opens as $want" $r ($r -eq $want)
 }
 
 # A Log tab and a language chosen for an untitled tab survive a restart

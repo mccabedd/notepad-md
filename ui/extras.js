@@ -885,7 +885,7 @@ function toggleInlineFormat(kind) {
   const doc = getActive();
   if (!doc) return false;
   const render = langInfo(doc).render;
-  if (lastFocused === 'preview' && layoutMode !== 'edit-only' && isMarkdownPreview(doc) && document.activeElement === preview) {
+  if (lastFocused === 'preview' && layoutMode !== 'edit-only' && isEditablePreview(doc) && document.activeElement === preview) {
     previewExec(kind);
     return true;
   }

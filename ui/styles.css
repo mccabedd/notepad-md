@@ -2074,3 +2074,159 @@ summary:focus-visible,
 .tab-scroll {
   margin-left: auto;
 }
+
+/* ---------- Settings pages (General / File Types / Syntax Validation) ---------- */
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.settings-tabs [role="tab"] {
+  flex: 1 1 0;
+  padding: 7px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.settings-tabs [role="tab"]:hover {
+  background: var(--hover, rgba(128, 128, 128, 0.12));
+  color: var(--fg);
+}
+.settings-tabs [role="tab"][aria-selected="true"] {
+  color: var(--fg);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.modal-body > section[hidden] {
+  display: none;
+}
+/* File Types: All / None stays put while the list scrolls; the list fills down each column. */
+.ft-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.ft-head .check {
+  font-weight: 600;
+}
+.ft-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(var(--ft-rows, 10), auto);
+  grid-auto-flow: column;
+  column-gap: 12px;
+  max-height: min(340px, calc(100vh - 330px));
+  min-height: 120px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding-right: 4px;
+}
+.modal-body .ft-grid .ft-item {
+  margin: 0;
+  padding: 3px 2px;
+  font-family: Consolas, "Cascadia Code", monospace;
+  white-space: nowrap;
+}
+
+/* ---------- syntax problems: gutter markers, underlines, the explanation popup ---------- */
+:root {
+  --diag-error: #e0303f;
+  --diag-warning: #d99a00;
+  --diag-info: #2f7fd6;
+}
+.line-numbers .ln-d {
+  position: absolute;
+  left: 2px;
+  top: calc(0.75em - 6px);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  font: 700 9px/12px "Segoe UI", sans-serif;
+  text-align: center;
+  color: #fff;
+  cursor: pointer;
+}
+.line-numbers .ln-d.error { background: var(--diag-error); }
+.line-numbers .ln-d.warning { background: var(--diag-warning); color: #000; }
+.line-numbers .ln-d.info { background: var(--diag-info); }
+.line-numbers .ln-d.error::before { content: '\00d7'; }
+.line-numbers .ln-d.warning::before { content: '!'; }
+.line-numbers .ln-d.info::before { content: 'i'; }
+.editor-highlight .diag-error,
+.editor-highlight .diag-warning,
+.editor-highlight .diag-info {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 2px;
+}
+.editor-highlight .diag-error { text-decoration-color: var(--diag-error); }
+.editor-highlight .diag-warning { text-decoration-color: var(--diag-warning); }
+.editor-highlight .diag-info { text-decoration-color: var(--diag-info); }
+/* A problem at the very end of a line (nothing to underline): a small wedge after it. */
+.editor-highlight .diag-eol {
+  position: relative;
+}
+.editor-highlight .diag-eol::after {
+  content: '';
+  position: absolute;
+  left: 1px;
+  bottom: 0.1em;
+  border: 4px solid transparent;
+  border-bottom-color: var(--diag-error);
+}
+.diag-pop {
+  position: fixed;
+  z-index: 60;
+  max-width: min(460px, calc(100vw - 24px));
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-alt);
+  color: var(--fg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  font: 13px/1.45 "Segoe UI", sans-serif;
+}
+.diag-pop .dp-item + .dp-item {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.diag-pop .dp-title {
+  font-weight: 600;
+}
+.diag-pop .dp-title.error { color: var(--diag-error); }
+.diag-pop .dp-title.warning { color: var(--diag-warning); }
+.diag-pop .dp-title.info { color: var(--diag-info); }
+.diag-pop .dp-fix {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.diag-pop code {
+  font-family: Consolas, "Cascadia Code", monospace;
+  background: var(--hover, rgba(128, 128, 128, 0.15));
+  padding: 0 3px;
+  border-radius: 3px;
+}
+.status-diag {
+  cursor: pointer;
+}
+.status-diag.error { color: var(--diag-error); }
+.status-diag.warning { color: var(--diag-warning); }
+
+/* BBCode tabs: toolbar buttons BBCode has no tag for */
+.toolbar button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

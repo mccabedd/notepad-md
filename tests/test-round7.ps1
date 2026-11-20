@@ -47,7 +47,7 @@ $r = J "return ['h','hpp','cc','cxx','cs'].map(e=>langForPath('x.'+e)).join(',')
 T 'Header / alternative extensions' $r ($r -eq 'c,cpp,cpp,cpp,csharp')
 $r = J "return ['java','css','c','csharp','cpp'].every(k=>!!hljs.getLanguage(LANGS[k].hljs))"
 T 'Grammars for the new languages are bundled' $r ($r -eq $true)
-$r = J "showLanguageMenu(statusLang); await new Promise(r=>setTimeout(r,100)); const t=[...ctxMenu.querySelectorAll('.ctx-label')].map(e=>e.textContent.trim()).join('|'); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); return ['Java','CSS','C','C#','C++'].every(n=>t.split('|').includes(n))"
+$r = J "showLanguageMenu(statusLang); await new Promise(r=>setTimeout(r,100)); const seen = new Set(); for (const g of ['Web and Data', 'Programming']) { const b = [...ctxMenu.querySelectorAll('button')].find(x => x.textContent.trim().startsWith(g)); b.dispatchEvent(new MouseEvent('mouseenter')); await new Promise(r=>setTimeout(r,100)); document.querySelectorAll('.ctx-label').forEach(e => seen.add(e.textContent.trim())); } document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); hideContextMenu(); return ['Java','CSS','C','C#','C++'].every(n=>seen.has(n))"
 T 'Language menu lists Java, CSS, C, C#, C++' $r ($r -eq $true)
 $r = J "return supportedExtensions().filter(e=>['java','css','c','h','cs','cpp','hpp','cmd','bat','ps1','js'].includes(e)).length"
 T 'New extensions are in the Register file types list' $r ($r -eq 11)

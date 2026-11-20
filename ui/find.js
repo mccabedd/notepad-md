@@ -865,7 +865,8 @@ function adjustLineAnchors(doc, oldText, newText) {
   const hasBm = doc.bookmarks && Object.keys(doc.bookmarks).length;
   const hasRemoved = doc.removedLines && doc.removedLines.size;
   const hasMatches = doc.id === activeId && findState.matches.length > 0;
-  if (!hasBm && !hasRemoved && !hasMatches) return;
+  const hasDiag = !!(doc.diag && doc.diag.list.length);
+  if (!hasBm && !hasRemoved && !hasMatches && !hasDiag) return;
   let p = 0;
   const min = Math.min(oldText.length, newText.length);
   while (p < min && oldText.charCodeAt(p) === newText.charCodeAt(p)) p++;
@@ -876,6 +877,7 @@ function adjustLineAnchors(doc, oldText, newText) {
     sn--;
   }
   if (hasMatches) shiftFindMatches(p, so, sn - so);
+  if (hasDiag) shiftDiagnostics(doc, p, so, sn - so);
   if (!hasBm && !hasRemoved) return;
   const countNl = (t, a, b) => {
     let n = 0;
@@ -932,6 +934,8 @@ function editorDecorations(doc) {
     const l = findState.navLine.line;
     if (l < c.lines.length && c.lines[l].length) lists.push([{ s: c.starts[l], e: c.starts[l] + c.lines[l].length, cls: 'nav-line' }]);
   }
+  const diags = typeof diagnosticDecorations === 'function' ? diagnosticDecorations(doc) : [];
+  if (diags.length) lists.push(diags);
   return lists.filter((l) => l.length);
 }
 

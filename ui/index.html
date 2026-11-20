@@ -169,6 +169,7 @@
   <div class="statusbar">
     <span id="status-file">Untitled</span>
     <span id="status-dirty"></span>
+    <button id="status-diag" class="status-btn status-diag hidden" title=""></button>
     <button id="status-follow" class="status-btn status-follow hidden" title="Following this file: new lines appear as it grows. Click to stop (View &gt; Follow File)">&#10227; Following</button>
     <span class="spacer"></span>
     <button id="status-lang" class="status-btn">Markdown</button>
@@ -185,7 +186,12 @@
         <span id="settings-title">Settings</span>
         <button id="settings-close" title="Close (Esc)">&#10005;</button>
       </div>
-      <div class="modal-body">
+      <div class="settings-tabs" role="tablist" aria-label="Settings pages">
+        <button role="tab" id="stab-general" data-tab="general" aria-controls="settings-body" aria-selected="true">General</button>
+        <button role="tab" id="stab-filetypes" data-tab="filetypes" aria-controls="settings-body" aria-selected="false" tabindex="-1">File Types</button>
+        <button role="tab" id="stab-validation" data-tab="validation" aria-controls="settings-body" aria-selected="false" tabindex="-1">Syntax Validation</button>
+      </div>
+      <div class="modal-body" id="settings-body" role="tabpanel">
         <section>
           <h3>General</h3>
           <label class="row">Theme <select data-s="theme"><option value="system">Follow Windows</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
@@ -225,19 +231,42 @@
           <p class="note">The default view is used for new tabs and for Markdown, text and BBCode files you open; code and config files always open in Edit Only. Font sizes are set under Editor and Preview; Ctrl+mouse wheel zooms one tab, and Ctrl+0 puts it back to 100%.</p>
         </section>
         <section>
-          <h3>Files</h3>
-          <div class="row"><span>Register file types</span><span class="btns"><button id="ft-register" title="Add NotePad-MD to the &quot;Open with&quot; list of every supported file type (just for your Windows account)">Register</button><button id="ft-unregister" title="Remove NotePad-MD from &quot;Open with&quot;">Unregister</button></span></div>
-          <p class="note" id="ft-status">Checking...</p>
-          <p class="note" id="ft-exts"></p>
-          <label class="check"><input type="checkbox" id="explorer-menu" /> Show <b>Edit in NotePad-MD</b> when you right-click a file in Explorer</label>
-          <p class="note" id="explorer-menu-status">On Windows 11 it's under <em>Show more options</em> (or Shift+right-click).</p>
-          <div class="row"><span>Make NotePad-MD the default app</span><button id="ft-defaults" title="Opens Windows Settings &gt; Default apps">Open Windows Default Apps</button></div>
-          <p class="note">Windows only lets <em>you</em> choose default apps: after registering, pick NotePad-MD there (or right-click a file &gt; Open with &gt; Choose another app &gt; NotePad-MD &gt; Always).</p>
-        </section>
-        <section>
           <h3>Spelling</h3>
           <label class="check"><input type="checkbox" data-s="spellEnabled" /> Check spelling <kbd>F7</kbd></label>
           <label class="row">Language <select data-s="spellLang"><option value="en_GB">English (UK)</option><option value="en_US">English (US)</option></select></label>
+        </section>
+        <section data-tab="filetypes">
+          <h3>Register file types</h3>
+          <p class="note">Tick a type to add NotePad-MD to its Windows <em>Open with</em> list (just for your Windows account). Your default apps never change: scripts such as .bat, .cmd and .ps1 still run as before.</p>
+          <div class="ft-head">
+            <label class="check"><input type="checkbox" id="ft-all" /> All / None</label>
+            <span class="note" id="ft-count" aria-live="polite"></span>
+          </div>
+          <div class="ft-grid" id="ft-grid" role="group" aria-label="File types"></div>
+          <p class="note" id="ft-status" aria-live="polite"></p>
+        </section>
+        <section data-tab="filetypes">
+          <h3>Explorer</h3>
+          <label class="check"><input type="checkbox" id="explorer-menu" /> Show <b>Edit in NotePad-MD</b> when you right-click a file in Explorer</label>
+          <p class="note" id="explorer-menu-status">On Windows 11 it's under <em>Show more options</em> (or Shift+right-click).</p>
+          <div class="row"><span>Make NotePad-MD the default app</span><button id="ft-defaults" title="Opens Windows Settings &gt; Default apps">Open Windows Default Apps</button></div>
+          <p class="note">Windows only lets <em>you</em> choose default apps: after ticking a type, pick NotePad-MD there (or right-click a file &gt; Open with &gt; Choose another app &gt; NotePad-MD &gt; Always).</p>
+        </section>
+        <section data-tab="validation">
+          <h3>Syntax validation</h3>
+          <label class="check"><input type="checkbox" data-s="validateEnabled" /> Check syntax while editing</label>
+          <p class="note"><b>Full syntax check:</b> JSON (also with comments, JSON5, JSON Lines), YAML, TOML, XML, JavaScript. <b>File format check:</b> Docker Compose (services, ports, volumes, networks), Dockerfile, .env, systemd units, INI, desktop entries. <b>Structure check</b> (brackets, quotes, blocks; not a full syntax check): Python (and indentation), shell scripts, PowerShell, CSS, NGINX, HCL / Terraform, Apache. Other languages: no check.</p>
+          <label class="check"><input type="checkbox" data-s="validateAuto" /> Check automatically while editing</label>
+          <label class="row">Check after a pause of <span><input type="number" data-s="validateDelay" min="200" max="5000" step="100" /> ms</span></label>
+          <label class="check"><input type="checkbox" data-s="validateLarge" /> Also check files from 1 MB to 5 MB automatically (larger files: <b>Search &gt; Check Syntax Now</b> only)</label>
+        </section>
+        <section data-tab="validation">
+          <h3>Showing problems</h3>
+          <label class="check"><input type="checkbox" data-s="validateMarkers" /> Markers beside the line numbers and wavy underlines</label>
+          <label class="check"><input type="checkbox" data-s="validateWarnings" /> Show warnings as well as errors</label>
+          <label class="check"><input type="checkbox" data-s="validateTooltips" /> Explain a problem when you point at it</label>
+          <label class="check"><input type="checkbox" data-s="validateFixes" /> Offer suggested fixes (only applied when you click <b>Apply fix</b>)</label>
+          <p class="note"><kbd>F8</kbd> / <kbd>Shift+F8</kbd> go to the next / previous problem; the status bar shows how many there are. Files are only read, never run. Languages without a check show “No syntax check” in the status bar.</p>
         </section>
       </div>
       <div class="modal-foot">
@@ -268,7 +297,7 @@
       </div>
       <div class="about-body">
         <img src="app-icon.png" alt="" width="64" height="64" />
-        <div class="about-name">NotePad-MD <span id="about-version">v1.1.2</span></div>
+        <div class="about-name">NotePad-MD <span id="about-version">v1.2.0</span></div>
         <a href="https://github.com/mccabedd/notepad-md" id="about-link">https://github.com/mccabedd/notepad-md</a>
         <div>Created by David McCabe</div>
         <button id="about-update" class="primary">Check for Updates</button>
@@ -304,10 +333,13 @@
   <script src="vendor/highlight/dos.min.js"></script>
   <script src="sanitize.js"></script>
   <script src="bbcode.js"></script>
+  <script src="bbcode-edit.js"></script>
   <script src="find.js"></script>
+  <script src="validate.js"></script>
   <script src="settings.js"></script>
   <script src="table.js"></script>
   <script src="log-grammar.js"></script>
+  <script src="config-grammars.js"></script>
   <script src="extras.js"></script>
   <script src="renderer.js"></script>
 </body>
