@@ -456,6 +456,7 @@ function setLineNumbersVisible(visible) {
   lineNumbersEl.classList.toggle('hidden', !visible);
   lineNumbersPreviewEl.classList.add('hidden'); // line numbers belong to the editor only, not the preview
   updateLineNumbers();
+  scheduleOverlay(); // with word wrap, the gutter follows the coloured layer's line blocks
 }
 
 function toggleLineNumbers() {
@@ -464,35 +465,139 @@ function toggleLineNumbers() {
   scheduleSessionSave();
 }
 
-/** Line numbers; bookmarked lines are shown in their bookmark colour. */
+/* ---------- the gutter: line numbers and the bookmark margin ----------
+ * Only the rows in view are drawn, each placed at its line's real position. With word wrap on,
+ * the positions come from the coloured layer (one block per line), so a wrapped line's number
+ * stays beside it. The margin to the right of the numbers shows bookmarks in their colour: a click
+ * there adds one in the current bookmark colour (or removes it), a right-click picks the colour. */
+
+let gutterCount = 1;
+
+/** The coloured layer must hold one block per line: the gutter follows wrapped lines with it, and hidden characters are drawn in it. */
+function overlayNeedsLines() {
+  return !!settings.showHidden || (lineNumbersVisible && !!settings.wordWrap);
+}
+
+/** After the text changed: recount the lines and redraw the rows in view. */
 function updateLineNumbers() {
   if (!lineNumbersVisible) return;
-  const doc = getActive();
   let count = 1;
   const v = editor.value;
   for (let i = v.indexOf('\n'); i !== -1; i = v.indexOf('\n', i + 1)) count++;
-  const bms = (doc && doc.bookmarks) || {};
-  // Typing within a line changes nothing here: skip rebuilding thousands of numbers.
-  const key = count + '|' + JSON.stringify(bms);
-  if (lineNumbersEl.dataset.key === key && lineNumbersEl.firstChild) {
-    lineNumbersEl.scrollTop = editor.scrollTop;
-    return;
-  }
-  lineNumbersEl.dataset.key = key;
-  const parts = new Array(count);
-  for (let i = 0; i < count; i++) {
-    const bm = bms[i];
-    parts[i] = bm ? '<span class="ln-bm bm-' + bm.toLowerCase() + '">' + (i + 1) + '</span>' : String(i + 1);
-  }
-  const html = parts.join('\n');
-  lineNumbersEl.innerHTML = html;
+  gutterCount = count;
   // Wide enough for the biggest number (at least 3 digits), so 5- and 6-digit numbers aren't cut off.
   const digits = Math.max(3, String(count).length);
   if (lineNumbersEl.dataset.digits !== String(digits)) {
     lineNumbersEl.dataset.digits = String(digits);
-    lineNumbersEl.style.width = 'calc(' + digits + 'ch + 12px)';
+    lineNumbersEl.style.width = 'calc(' + digits + 'ch + 12px + var(--bm-margin))';
   }
-  lineNumbersEl.scrollTop = editor.scrollTop;
+  renderGutter();
+}
+
+let gutterFrame = 0;
+function scheduleGutter() {
+  if (!lineNumbersVisible || gutterFrame) return;
+  gutterFrame = requestAnimationFrame(() => {
+    gutterFrame = 0;
+    renderGutter();
+  });
+}
+
+/** Top and height (relative to the gutter) of each line in view: [{ line, top, height }]. */
+function gutterRowsInView() {
+  const box = lineNumbersEl.getBoundingClientRect();
+  const height = box.height || editor.clientHeight;
+  const out = [];
+  const kids = editorHighlight.children;
+  const layered = settings.wordWrap && !editorHighlight.classList.contains('hidden') && kids.length === gutterCount && kids[0] && kids[0].classList.contains('ovl');
+  if (layered) {
+    // Wrapped lines have different heights: find the first line in view, then walk down.
+    let lo = 0;
+    let hi = gutterCount - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (kids[mid].getBoundingClientRect().bottom - box.top <= 0) lo = mid + 1;
+      else hi = mid;
+    }
+    for (let i = lo; i < gutterCount; i++) {
+      const r = kids[i].getBoundingClientRect();
+      const top = r.top - box.top;
+      if (top > height) break;
+      out.push({ line: i, top, height: r.height });
+    }
+    return out;
+  }
+  const cs = getComputedStyle(editor);
+  const lh = parseFloat(cs.lineHeight) || 21;
+  const pad = parseFloat(cs.paddingTop) || 0;
+  const shift = editor.getBoundingClientRect().top - box.top + pad - editor.scrollTop;
+  const first = Math.max(0, Math.floor(-shift / lh));
+  for (let i = first; i < gutterCount; i++) {
+    const top = shift + i * lh;
+    if (top > height) break;
+    out.push({ line: i, top, height: lh });
+  }
+  return out;
+}
+
+function renderGutter() {
+  if (!lineNumbersVisible) return;
+  const doc = getActive();
+  const bms = (doc && doc.bookmarks) || {};
+  const html = [];
+  for (const r of gutterRowsInView()) {
+    const bm = bms[r.line];
+    const cls = bm ? ' bm-' + bm.toLowerCase() : '';
+    html.push(
+      '<div class="ln-row' + (bm ? ' ln-bm' + cls : '') + '" data-l="' + r.line + '" style="top:' + r.top.toFixed(1) + 'px;height:' + r.height.toFixed(1) + 'px">' +
+        '<span class="ln-n">' + (r.line + 1) + '</span><span class="ln-m' + cls + '"></span></div>'
+    );
+  }
+  lineNumbersEl.innerHTML = html.join('');
+  lineNumbersEl.dataset.colour = (settings.bookmarkColour || 'Green').toLowerCase();
+}
+
+/** The line a mouse event in the gutter points at (null below the last line). */
+function gutterLineAt(e) {
+  const row = e.target.closest && e.target.closest('.ln-row');
+  if (row) return Number(row.dataset.l);
+  for (const r of gutterRowsInView()) {
+    const y = e.clientY - lineNumbersEl.getBoundingClientRect().top;
+    if (y >= r.top && y < r.top + r.height) return r.line;
+  }
+  return null;
+}
+
+function wireGutter() {
+  lineNumbersEl.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault(); // keep the caret where it is
+    const line = gutterLineAt(e);
+    const doc = getActive();
+    if (line === null || !doc) return;
+    if (e.target.closest('.ln-m') || e.clientX >= lineNumbersEl.getBoundingClientRect().right - 20) {
+      setBookmarks(doc, [line], bookmarkOf(doc, line) ? null : settings.bookmarkColour);
+      return;
+    }
+    // On the number: select the whole line.
+    const c = lineIndex(doc);
+    if (line >= c.starts.length) return;
+    const end = line + 1 < c.starts.length ? c.starts[line + 1] : doc.content.length;
+    editor.focus();
+    editor.setSelectionRange(c.starts[line], end);
+    updateStatusBar();
+  });
+  lineNumbersEl.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const line = gutterLineAt(e);
+    const doc = getActive();
+    if (line === null || !doc) return;
+    showBookmarkMarginMenu(e.clientX, e.clientY, doc, line);
+  });
+  lineNumbersEl.addEventListener('wheel', (e) => {
+    editor.scrollTop += e.deltaY;
+  }, { passive: true });
+  if (window.ResizeObserver) new ResizeObserver(() => scheduleGutter()).observe(editor);
 }
 
 /* ---------- syntax highlighting ---------- */
@@ -545,7 +650,7 @@ function renderEditorOverlay() {
   const decos = doc && text === doc.content ? editorDecorations(doc) : [];
   const hasIndent = /(^|\n)[ \t]/.test(text);
   const hasUrl = URL_RE_TEST.test(text);
-  const useOverlay = !!doc && text.length <= HIGHLIGHT_MAX_CHARS && (!!info.hljs || wantSpell || decos.length > 0 || hasIndent || hasUrl);
+  const useOverlay = !!doc && text.length <= HIGHLIGHT_MAX_CHARS && (!!info.hljs || wantSpell || decos.length > 0 || hasIndent || hasUrl || overlayNeedsLines());
   editor.classList.toggle('hl-active', useOverlay);
   editorHighlight.classList.toggle('hidden', !useOverlay);
   if (!useOverlay) {
@@ -581,6 +686,7 @@ let overlayUnknownWords = 0; // counts words looked up that the spellchecker has
 
 function resetOverlayLines() {
   overlayState = null;
+  scheduleGutter();
 }
 
 /** Splits highlighted HTML into one balanced HTML string per line (spans closed and reopened at line ends). */
@@ -631,9 +737,12 @@ function patchOverlayLines(doc, text, lines, lists, urls, wantSpell, hasIndent) 
     keys[i] = local ? lines[i] + '\u0001' + JSON.stringify(local) : lines[i];
     lineStart = lineEnd + 1;
   }
+  // Hidden characters: the last line has no line ending to show, so it is redrawn when it stops being the last.
+  const hidden = !!settings.showHidden;
+  if (hidden && n) keys[n - 1] += '\u0002';
 
   // Anything that changes every line's decoration starts the layer afresh.
-  const gen = [doc.id, wantSpell, spell.lang, spell.userWords.size, spell.ignored.size, hasIndent && (settings.tabSize || 4)].join('|');
+  const gen = [doc.id, wantSpell, spell.lang, spell.userWords.size, spell.ignored.size, hasIndent && (settings.tabSize || 4), hidden && 'hidden:' + doc.eol + ':' + doc.encoding].join('|');
   const kids = editorHighlight.children;
   const prev = overlayState && overlayState.gen === gen && kids.length === overlayState.keys.length ? overlayState : null;
   const oldKeys = prev ? prev.keys : [];
@@ -659,6 +768,7 @@ function patchOverlayLines(doc, text, lines, lists, urls, wantSpell, hasIndent) 
     }
     unchecked[i] = overlayUnknownWords !== hits;
     if (hasIndent) h = addIndentGuides(h);
+    if (hidden) h = markHiddenChars(h, i < n - 1 ? doc.eol : null, i === 0 && /bom|utf16/.test(doc.encoding || ''));
     html.push('<span class="ovl">' + h + '</span>');
   }
   const tpl = document.createElement('template');
@@ -679,6 +789,7 @@ function patchOverlayLines(doc, text, lines, lists, urls, wantSpell, hasIndent) 
   if (kids.length >= 2) setOverlayLineEnd(kids[kids.length - 2], '\n');
   if (kids.length) setOverlayLineEnd(kids[kids.length - 1], text.endsWith('\n') ? ' ' : '');
   overlayState = { gen, keys, unchecked, spellGen: overlaySpellGen };
+  scheduleGutter(); // wrapped lines may have changed height
 }
 
 function overlayLineEnd(t) {
@@ -702,6 +813,84 @@ function overlayOffsetOf(span) {
   if (!line || !doc) return Number(span.dataset.o);
   const idx = Array.prototype.indexOf.call(editorHighlight.children, line);
   return lineIndex(doc).starts[idx] + Number(span.dataset.o);
+}
+
+/* ---------- hidden characters (View > Show Hidden Characters, Ctrl+Shift+H) ----------
+ * Drawn in the coloured layer without changing the width of anything, so the text still lines up:
+ * spaces get a dot, tabs an arrow, spaces and tabs at the end of a line a red tint, each line its
+ * ending (CRLF or LF), and characters you can't normally see (zero-width spaces, byte order marks,
+ * control characters) a red bar with their code. Look-alike spaces (no-break space...) get an orange dot. */
+
+const HC_ODD_SPACE = '   -   　';
+const HC_INVISIBLE = '​-‏  ‪-‮⁠-⁤⁦-⁩﻿­᠎';
+const HC_CONTROL = '\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F';
+const HC_RE = new RegExp('( +)|(\\t)|([' + HC_ODD_SPACE + '])|([' + HC_INVISIBLE + HC_CONTROL + '])', 'g');
+const HC_NAMES = {
+  '200B': 'zero-width space',
+  '200C': 'zero-width non-joiner',
+  '200D': 'zero-width joiner',
+  '200E': 'left-to-right mark',
+  '200F': 'right-to-left mark',
+  '2060': 'word joiner',
+  FEFF: 'zero-width no-break space (BOM)',
+  '00A0': 'no-break space',
+  '00AD': 'soft hyphen',
+  '202F': 'narrow no-break space',
+};
+
+function hcCode(ch) {
+  return ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0');
+}
+
+function markHiddenChars(html, eol, bom) {
+  let out = html.replace(/<[^>]*>|[^<]+/g, (t) =>
+    t[0] === '<'
+      ? t
+      : t.replace(/&nbsp;/g, ' ').replace(HC_RE, (m, sp, tab, odd) =>
+          sp ? '<span class="hc-sp">' + sp + '</span>' : tab ? '<span class="hc-tab">\t</span>' : '<span class="' + (odd ? 'hc-nb' : 'hc-zw') + '" data-c="' + hcCode(m) + '">' + m + '</span>'
+        )
+  );
+  // Spaces and tabs at the end of the line (inside any colouring spans that close there).
+  out = out.replace(/((?:<span class="hc-(?:sp|tab)">[^<]*<\/span>)+)((?:<\/span>)*)$/, '<span class="hc-trail">$1</span>$2');
+  if (bom) out = '<span class="hc-bom"></span>' + out;
+  if (eol) out += '<span class="hc-eol" data-e="' + (eol === 'crlf' ? 'CRLF' : 'LF') + '"></span>';
+  return out;
+}
+
+/** One-line report for the status bar when hidden characters are switched on. */
+function hiddenCharSummary(doc) {
+  if (!doc) return 'Hidden characters on';
+  const text = doc.content;
+  const parts = [(doc.eol === 'crlf' ? 'CRLF' : 'LF') + ' line endings'];
+  if (/bom|utf16/.test(doc.encoding || '')) parts.push('byte order mark (BOM) at the start');
+  const lines = text.split('\n');
+  let trailing = 0;
+  let firstTrailing = -1;
+  const odd = new Map(); // code -> { n, line }
+  const re = new RegExp('[' + HC_ODD_SPACE + HC_INVISIBLE + HC_CONTROL + ']', 'g');
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (/[ \t]$/.test(l)) {
+      trailing++;
+      if (firstTrailing < 0) firstTrailing = i;
+    }
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(l))) {
+      const code = hcCode(m[0]);
+      const e = odd.get(code) || { n: 0, line: i };
+      e.n++;
+      odd.set(code, e);
+    }
+  }
+  if (trailing) parts.push(fmtCount(trailing) + ' line(s) end in spaces or tabs (first: line ' + fmtCount(firstTrailing + 1) + ')');
+  for (const [code, e] of [...odd.entries()].slice(0, 3)) {
+    parts.push(fmtCount(e.n) + ' × ' + (HC_NAMES[code] || 'U+' + code) + ' (U+' + code + ', first: line ' + fmtCount(e.line + 1) + ')');
+  }
+  if (odd.size > 3) parts.push('and ' + (odd.size - 3) + ' other kind(s)');
+  if (!trailing && !odd.size) parts.push('no trailing spaces or invisible characters');
+  const tooBig = text.length > LAZY_HIGHLIGHT_MAX ? ' (too large to draw them in the editor)' : '';
+  return 'Hidden characters on' + tooBig + ': ' + parts.join(' · ');
 }
 
 /* ---------- indent guides and links in the editor ---------- */
@@ -1673,7 +1862,7 @@ function restoreDocView(doc) {
   preview.scrollTop = v ? v.previewTop : 0;
   editorHighlight.scrollTop = editor.scrollTop;
   if (lineNumbersVisible) {
-    lineNumbersEl.scrollTop = editor.scrollTop;
+    renderGutter();
     lineNumbersPreviewEl.scrollTop = preview.scrollTop;
   }
 }
@@ -2818,7 +3007,7 @@ function wireDomEvents() {
   editor.addEventListener('scroll', () => {
     editorHighlight.scrollTop = editor.scrollTop;
     editorHighlight.scrollLeft = editor.scrollLeft;
-    if (lineNumbersVisible) lineNumbersEl.scrollTop = editor.scrollTop;
+    if (lineNumbersVisible) renderGutter();
   });
   editor.addEventListener('focus', () => (lastFocused = 'editor'));
   editor.addEventListener('mousedown', () => {
@@ -3046,13 +3235,16 @@ function wireDomEvents() {
   });
 
   wireFind();
+  wireGutter();
 
-  // Alt pressed and released on its own (nothing else in between) toggles the menu bar.
+  // Alt pressed and released on its own (nothing else in between), while the menu bar is switched
+  // off, shows it until a command is picked from it; Alt again, a click or another key hides it.
   let altAlone = false;
   document.addEventListener(
     'keydown',
     (e) => {
       altAlone = e.key === 'Alt' && !e.repeat && !e.ctrlKey && !e.shiftKey && !e.metaKey ? true : e.key === 'Alt' && e.repeat ? altAlone : false;
+      if (e.key !== 'Alt') endMenuPeek();
     },
     true
   );
@@ -3062,12 +3254,19 @@ function wireDomEvents() {
       if (e.key === 'Alt' && altAlone) {
         e.preventDefault();
         altAlone = false;
-        toggleMenuBar();
+        peekMenuBar();
       }
     },
     true
   );
-  document.addEventListener('mousedown', () => (altAlone = false), true);
+  document.addEventListener(
+    'mousedown',
+    () => {
+      altAlone = false;
+      endMenuPeek();
+    },
+    true
+  );
   window.addEventListener('blur', () => (altAlone = false));
 
   // Single source of truth for every keyboard shortcut (native menu accelerators are display-only).
@@ -3170,6 +3369,9 @@ function wireDomEvents() {
     } else if (key === 'l' && e.shiftKey) {
       e.preventDefault();
       toggleLineNumbers();
+    } else if (e.code === 'KeyH' && e.shiftKey) {
+      e.preventDefault();
+      toggleHiddenChars();
     } else if (key === 'f') {
       e.preventDefault();
       openFindBar(e.shiftKey ? true : undefined);
@@ -3210,6 +3412,10 @@ function currentMenuChecks() {
     status_bar: !!settings.statusBar,
     word_wrap: !!settings.wordWrap,
     toggle_line_numbers: !!lineNumbersVisible,
+    show_hidden: !!settings.showHidden,
+    bookmark_colour_green: settings.bookmarkColour === 'Green',
+    bookmark_colour_orange: settings.bookmarkColour === 'Orange',
+    bookmark_colour_red: settings.bookmarkColour === 'Red',
     layout_edit_only: layoutMode === 'edit-only',
     layout_preview_only: layoutMode === 'preview-only',
     layout_edit_left: layoutMode === 'split-ep',
@@ -3313,6 +3519,15 @@ function wireMenuListeners() {
     const d = getActive();
     if (d) clearAllBookmarks(d);
   });
+  for (const c of ['Green', 'Orange', 'Red']) listen('menu-bookmark-colour-' + c.toLowerCase(), () => setBookmarkColour(c));
+  listen('menu-bookmark-cut', () => bookmarkedLinesAction('cut'));
+  listen('menu-bookmark-copy', () => bookmarkedLinesAction('copy'));
+  listen('menu-bookmark-paste', () => bookmarkedLinesAction('paste'));
+  listen('menu-bookmark-remove', () => bookmarkedLinesAction('remove'));
+  listen('menu-bookmark-remove-others', () => bookmarkedLinesAction('remove-others'));
+  listen('menu-bookmark-inverse', () => bookmarkedLinesAction('inverse'));
+  listen('menu-show-hidden', () => toggleHiddenChars());
+  listen('menu-peek-ended', () => (menuPeek = false));
   listen('menu-spell-toggle', () => toggleSpell());
   listen('menu-spell-en-gb', () => setSpellLang('en_GB'));
   listen('menu-spell-en-us', () => setSpellLang('en_US'));

@@ -124,7 +124,7 @@
   <div id="adv-pane" class="adv-pane hidden">
     <div class="adv-head">
       <span class="adv-title">Advanced Find</span>
-      <span class="adv-desc">Lines matching the filters &middot; click a row to jump to it, double-click or Enter to edit there, right-click for more</span>
+      <span class="adv-desc">Lines matching the filters &middot; click a row to jump to it, double-click a Time or Text cell to copy it, Enter to edit there, right-click for more</span>
       <button id="adv-reset" title="Clear the filters and bring back rows you removed (bookmarks are kept)">Reset</button>
       <button id="adv-max" title="Make the list fill the window (and back)">Maximize</button>
       <button id="adv-close" class="adv-close" title="Close the Advanced pane (the find bar stays open)">&#10005;</button>
@@ -139,6 +139,7 @@
       <label class="adv-check"><input id="adv-case" type="checkbox" /> Match case</label>
       <label class="adv-check"><input id="adv-word" type="checkbox" /> Whole word</label>
       <label class="adv-check"><input id="adv-regex" type="checkbox" /> Regex</label>
+      <label class="adv-check" title="* in a Find or Hide term stands for any characters within a line, e.g. error*timeout"><input id="adv-wild" type="checkbox" /> Wildcard</label>
       <label class="adv-field">In: <select id="adv-scope" title="Search the current tab or every open tab"><option value="tab">This tab</option><option value="all">All open tabs</option></select></label>
       <span class="adv-sep"></span>
       <label class="adv-check" title="Always list bookmarked lines, even when they don't match the filters; untick to stop"><input id="adv-add-bm" type="checkbox" /> <span id="adv-add-bm-label">Add Bookmarks</span></label>
@@ -267,7 +268,7 @@
       </div>
       <div class="about-body">
         <img src="app-icon.png" alt="" width="64" height="64" />
-        <div class="about-name">NotePad-MD <span id="about-version">v1.1.1</span></div>
+        <div class="about-name">NotePad-MD <span id="about-version">v1.1.2</span></div>
         <a href="https://github.com/mccabedd/notepad-md" id="about-link">https://github.com/mccabedd/notepad-md</a>
         <div>Created by David McCabe</div>
         <button id="about-update" class="primary">Check for Updates</button>

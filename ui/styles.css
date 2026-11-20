@@ -579,19 +579,22 @@ body {
 }
 
 .line-numbers {
+  --bm-margin: 16px; /* the bookmark margin, right of the numbers */
+  position: relative;
   flex: 0 0 auto;
-  width: 42px;
+  width: calc(3ch + 12px + var(--bm-margin));
   overflow: hidden;
-  padding: 14px 6px 14px 0;
+  padding: 0;
   text-align: right;
   user-select: none;
+  cursor: default;
   color: var(--fg-muted);
   font-family: Consolas, "Cascadia Code", Menlo, monospace;
   font-size: var(--content-font-size);
   line-height: 1.5;
   background: var(--bg-alt);
   border-right: 1px solid var(--border);
-  white-space: pre;
+  white-space: nowrap;
 }
 
 /* The editor is a <textarea> layered exactly over a <pre> that shows the same text with
@@ -910,12 +913,126 @@ body.nowrap .preview.code-view pre code {
   color: var(--bg);
 }
 
-.line-numbers .ln-bm {
+/* Gutter rows: only the lines in view, each placed beside its line (wrapped lines are taller). */
+.line-numbers .ln-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+}
+.line-numbers .ln-n {
+  flex: 1 1 auto;
+  padding-right: 4px;
+}
+.line-numbers .ln-bm .ln-n {
   font-weight: 700;
 }
-.line-numbers .ln-bm.bm-red { color: var(--bm-red); }
-.line-numbers .ln-bm.bm-orange { color: var(--bm-orange); }
-.line-numbers .ln-bm.bm-green { color: var(--bm-green); }
+.line-numbers .ln-bm.bm-red .ln-n { color: var(--bm-red); }
+.line-numbers .ln-bm.bm-orange .ln-n { color: var(--bm-orange); }
+.line-numbers .ln-bm.bm-green .ln-n { color: var(--bm-green); }
+/* The bookmark margin: a dot in the bookmark's colour; hovering shows where a click would add one. */
+.line-numbers .ln-m {
+  flex: 0 0 var(--bm-margin);
+  align-self: stretch;
+  max-height: 1.5em;
+  position: relative;
+  cursor: pointer;
+}
+.line-numbers .ln-m::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: calc(0.75em - 5px);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.line-numbers .ln-m.bm-green::before { background: var(--bm-green); }
+.line-numbers .ln-m.bm-orange::before { background: var(--bm-orange); }
+.line-numbers .ln-m.bm-red::before { background: var(--bm-red); }
+.line-numbers .ln-row:hover .ln-m:not(.bm-green):not(.bm-orange):not(.bm-red)::before { opacity: 0.4; }
+.line-numbers[data-colour="green"] .ln-row:hover .ln-m:not([class*="bm-"])::before { background: var(--bm-green); }
+.line-numbers[data-colour="orange"] .ln-row:hover .ln-m:not([class*="bm-"])::before { background: var(--bm-orange); }
+.line-numbers[data-colour="red"] .ln-row:hover .ln-m:not([class*="bm-"])::before { background: var(--bm-red); }
+
+/* Hidden characters (View > Show Hidden Characters): drawn without changing any widths. */
+:root {
+  --hc: rgba(128, 128, 128, 0.75);
+  --hc-bad: #e0303f;
+  --hc-trail: rgba(224, 48, 63, 0.2);
+}
+.editor-highlight .hc-sp {
+  background-image: radial-gradient(circle at 50% 50%, var(--hc) 0.09em, transparent 0.12em);
+  background-size: 1ch 100%;
+  background-repeat: repeat-x;
+}
+.editor-highlight .hc-tab {
+  position: relative;
+}
+.editor-highlight .hc-tab::before {
+  content: '\2192';
+  position: absolute;
+  left: 0;
+  color: var(--hc);
+}
+.editor-highlight .hc-trail {
+  background-color: var(--hc-trail);
+}
+.editor-highlight .hc-nb {
+  background-image: radial-gradient(circle at 50% 50%, var(--bm-orange) 0.12em, transparent 0.15em);
+  background-size: 1ch 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  text-decoration: underline dotted var(--bm-orange);
+}
+.editor-highlight .hc-zw,
+.editor-highlight .hc-eol,
+.editor-highlight .hc-bom {
+  position: relative;
+}
+.editor-highlight .hc-zw::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 0.1em;
+  height: 1.3em;
+  width: 2px;
+  background: var(--hc-bad);
+}
+.editor-highlight .hc-zw::after {
+  content: attr(data-c);
+  position: absolute;
+  left: 2px;
+  top: -0.35em;
+  font: 700 0.55em/1 "Segoe UI", sans-serif;
+  color: #fff;
+  background: var(--hc-bad);
+  padding: 0 2px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.editor-highlight .hc-eol::after,
+.editor-highlight .hc-bom::before {
+  position: absolute;
+  top: 0.35em;
+  font: 600 0.6em/1.2 "Segoe UI", sans-serif;
+  color: var(--hc);
+  border: 1px solid var(--hc);
+  border-radius: 2px;
+  padding: 0 2px;
+  white-space: nowrap;
+}
+.editor-highlight .hc-eol::after {
+  content: attr(data-e);
+  left: 3px;
+}
+.editor-highlight .hc-bom::before {
+  content: 'BOM';
+  right: 2px;
+  color: var(--hc-bad);
+  border-color: var(--hc-bad);
+}
 
 /* BBCode preview (read-only) */
 .preview.bb-view blockquote .bb-cite {

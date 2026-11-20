@@ -28,10 +28,13 @@ const DEFAULT_SETTINGS = {
   previewStyle: 'normal',
   previewColor: '',
   previewBg: '',
+  showHidden: false, // View > Show Hidden Characters (spaces, tabs, line endings, invisible characters)
+  bookmarkColour: 'Green', // colour a click in the bookmark margin (and Ctrl+F2) gives a line
 };
 
 let settings = { ...DEFAULT_SETTINGS };
 let appliedMenuBar = null;
+let menuPeek = false; // the menu bar is switched off but shown for now (Alt), until a command is picked
 
 const FONT_STYLES = {
   normal: ['400', 'normal'],
@@ -56,6 +59,7 @@ function loadSettings(saved) {
   settings.editFontSize = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(settings.editFontSize)));
   settings.previewFontSize = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(settings.previewFontSize)));
   if (![2, 4, 8].includes(settings.tabSize)) settings.tabSize = 4;
+  if (!['Green', 'Orange', 'Red'].includes(settings.bookmarkColour)) settings.bookmarkColour = 'Green';
   settings.tabFontSize = clampTabFont(settings.tabFontSize);
 }
 
@@ -131,6 +135,7 @@ function applySettings() {
   if (typeof applyOutlineVisibility === 'function') applyOutlineVisibility();
   if (appliedMenuBar !== settings.menuBar) {
     appliedMenuBar = settings.menuBar;
+    menuPeek = false;
     invoke('cmd_set_menu_visible', { visible: settings.menuBar }).catch((e) => console.error('menu bar', e));
   }
   renderEditorOverlay();
@@ -160,6 +165,34 @@ function toggleSidebar() {
 function toggleMenuBar() {
   if (!debounceAction('toggle-menubar')) return;
   changeSetting('menuBar', !settings.menuBar);
+}
+
+/** Alt on its own while the menu bar is switched off: show it until a command is picked (Alt again, a click or a key hides it). */
+function peekMenuBar() {
+  if (settings.menuBar) return; // shown for good; View > Menu Bar switches it off
+  if (!debounceAction('toggle-menubar')) return;
+  menuPeek = !menuPeek;
+  invoke('cmd_set_menu_visible', { visible: menuPeek, peek: true }).catch((e) => console.error('menu bar', e));
+}
+
+function endMenuPeek() {
+  if (!menuPeek) return;
+  menuPeek = false;
+  if (!settings.menuBar) invoke('cmd_set_menu_visible', { visible: false, peek: false }).catch((e) => console.error('menu bar', e));
+}
+
+/** View > Show Hidden Characters (Ctrl+Shift+H). */
+function toggleHiddenChars() {
+  if (!debounceAction('toggle-hidden')) return;
+  changeSetting('showHidden', !settings.showHidden);
+  syncMenuChecks(true);
+  flashFindStatus(settings.showHidden ? hiddenCharSummary(getActive()) : 'Hidden characters off', settings.showHidden ? 10000 : 3000);
+}
+
+function setBookmarkColour(colour) {
+  if (!['Green', 'Orange', 'Red'].includes(colour)) return;
+  if (settings.bookmarkColour !== colour) changeSetting('bookmarkColour', colour);
+  syncMenuChecks(true);
 }
 
 function toggleStatusBar() {

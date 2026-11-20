@@ -54,6 +54,8 @@ struct AppState {
     /// The page confirmed it is handling the close (it may be showing a save prompt), so the
     /// safety-net timer must not destroy the window.
     close_acked: AtomicBool,
+    /// The menu bar was shown by pressing Alt while it is switched off: the next menu command hides it again.
+    menu_peek: AtomicBool,
 }
 
 #[derive(serde::Serialize)]
@@ -169,7 +171,8 @@ fn cmd_close_cancelled(state: State<AppState>) {
 }
 
 #[tauri::command]
-fn cmd_set_menu_visible(window: tauri::Window, visible: bool) -> Result<(), String> {
+fn cmd_set_menu_visible(window: tauri::Window, state: State<AppState>, visible: bool, peek: Option<bool>) -> Result<(), String> {
+    state.menu_peek.store(visible && peek.unwrap_or(false), Ordering::SeqCst);
     let r = if visible { window.show_menu() } else { window.hide_menu() };
     r.map_err(|e| e.to_string())
 }
@@ -263,6 +266,7 @@ fn main() {
             initial_files: Mutex::new(initial_files),
             closing: AtomicBool::new(false),
             close_acked: AtomicBool::new(false),
+            menu_peek: AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
             cmd_read_file,
@@ -383,6 +387,37 @@ fn main() {
                 ],
             )?;
 
+            // Search > Bookmark. The colour is the one a click in the bookmark margin (and Ctrl+F2) uses.
+            let bookmark_colour_submenu = Submenu::with_items(
+                app,
+                "Bookmark Colour",
+                true,
+                &[
+                    &check("bookmark_colour_green", "Green", None)?,
+                    &check("bookmark_colour_orange", "Orange", None)?,
+                    &check("bookmark_colour_red", "Red", None)?,
+                ],
+            )?;
+            let bookmark_submenu = Submenu::with_items(
+                app,
+                "Bookmark",
+                true,
+                &[
+                    &MenuItem::with_id(app, "bookmark_toggle", "Toggle Bookmark", true, Some("CmdOrCtrl+F2"))?,
+                    &MenuItem::with_id(app, "bookmark_next", "Next Bookmark", true, Some("F2"))?,
+                    &MenuItem::with_id(app, "bookmark_prev", "Previous Bookmark", true, Some("Shift+F2"))?,
+                    &MenuItem::with_id(app, "bookmark_clear", "Clear All Bookmarks...", true, None::<&str>)?,
+                    &bookmark_colour_submenu,
+                    &PredefinedMenuItem::separator(app)?,
+                    &MenuItem::with_id(app, "bookmark_cut", "Cut Bookmarked Lines", true, None::<&str>)?,
+                    &MenuItem::with_id(app, "bookmark_copy", "Copy Bookmarked Lines", true, None::<&str>)?,
+                    &MenuItem::with_id(app, "bookmark_paste", "Paste to (Replace) Bookmarked Lines", true, None::<&str>)?,
+                    &MenuItem::with_id(app, "bookmark_remove", "Remove Bookmarked Lines", true, None::<&str>)?,
+                    &MenuItem::with_id(app, "bookmark_remove_others", "Remove Non-Bookmarked Lines", true, None::<&str>)?,
+                    &MenuItem::with_id(app, "bookmark_inverse", "Inverse Bookmarks", true, None::<&str>)?,
+                ],
+            )?;
+
             let search_submenu = Submenu::with_items(
                 app,
                 "Search",
@@ -405,10 +440,7 @@ fn main() {
                     &MenuItem::with_id(app, "find_next", "Find Next", true, Some("F3"))?,
                     &MenuItem::with_id(app, "find_prev", "Find Previous", true, Some("Shift+F3"))?,
                     &PredefinedMenuItem::separator(app)?,
-                    &MenuItem::with_id(app, "bookmark_toggle", "Toggle Bookmark", true, Some("CmdOrCtrl+F2"))?,
-                    &MenuItem::with_id(app, "bookmark_next", "Next Bookmark", true, Some("F2"))?,
-                    &MenuItem::with_id(app, "bookmark_prev", "Previous Bookmark", true, Some("Shift+F2"))?,
-                    &MenuItem::with_id(app, "bookmark_clear", "Clear Bookmarks in This Tab...", true, None::<&str>)?,
+                    &bookmark_submenu,
                 ],
             )?;
 
@@ -449,12 +481,13 @@ fn main() {
                 &[
                     &check("toolbar", "Toolbar", Some("CmdOrCtrl+T"))?,
                     &check("sidebar", "Sidebar", Some("CmdOrCtrl+Shift+E"))?,
-                    // "Alt" alone is not a valid accelerator, so the hint is part of the title.
-                    &check("menu_bar", "Menu Bar\tAlt", None)?,
+                    // While it is switched off, Alt shows it until a command is picked.
+                    &check("menu_bar", "Menu Bar", None)?,
                     &check("status_bar", "Status Bar", None)?,
                     &check("outline", "Outline", Some("CmdOrCtrl+Shift+O"))?,
                     &check("word_wrap", "Word Wrap", Some("Alt+Z"))?,
                     &check("toggle_line_numbers", "Line Numbers", Some("CmdOrCtrl+Shift+L"))?,
+                    &check("show_hidden", "Show Hidden Characters", Some("CmdOrCtrl+Shift+H"))?,
                     &check("follow_file", "Follow File (Tail)", None)?,
                     &PredefinedMenuItem::separator(app)?,
                     // Order (and Ctrl+Alt+1..4): Edit, Preview, Edit/Preview, Preview/Edit.
@@ -521,6 +554,13 @@ fn main() {
                         }
                     }
                     _ => {
+                        // A menu bar shown with Alt (while switched off) goes away again once used.
+                        if app_handle.state::<AppState>().menu_peek.swap(false, Ordering::SeqCst) {
+                            if let Some(w) = app_handle.get_webview_window("main") {
+                                let _ = w.hide_menu();
+                            }
+                            let _ = app_handle.emit("menu-peek-ended", ());
+                        }
                         let _ = app_handle.emit(&format!("menu-{}", id.replace('_', "-")), ());
                     }
                 }

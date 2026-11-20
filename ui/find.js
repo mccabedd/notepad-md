@@ -24,6 +24,7 @@ const advHide = document.getElementById('adv-hide');
 const advCase = document.getElementById('adv-case');
 const advWord = document.getElementById('adv-word');
 const advRegex = document.getElementById('adv-regex');
+const advWild = document.getElementById('adv-wild');
 const advScope = document.getElementById('adv-scope');
 const advAddBm = document.getElementById('adv-add-bm');
 const advAddBmLabel = document.getElementById('adv-add-bm-label');
@@ -244,18 +245,33 @@ function advancedActive() {
 
 let matcherCache = { key: null, value: null };
 
+/** Wildcard term: * stands for any run of characters within a line (a * at either end changes nothing). */
+function wildcardSource(term) {
+  const core = term.replace(/^\*+|\*+$/g, '');
+  return core ? core.split(/\*+/).map(escapeRegExp).join('.*?') : '';
+}
+
+/** Hide box terms (lower case); with Wildcard ticked, a term with * in it becomes a pattern. */
+function hideMatchers() {
+  const wild = advWild.checked && !advRegex.checked;
+  return splitTerms(advHide.value)
+    .map((t) => t.toLowerCase())
+    .map((t) => (wild && t.includes('*') ? (wildcardSource(t) ? { re: new RegExp(wildcardSource(t)) } : null) : t))
+    .filter(Boolean);
+}
+
 /**
  * Basic mode: the Find text literally, case-insensitive (as before).
  * Advanced mode: comma-separated terms (any of them), or a regular expression, with Match case / Whole word.
  */
 function buildMatcher() {
   const adv = advancedOn();
-  const o = { text: findInput.value, adv, mc: adv && advCase.checked, ww: adv && advWord.checked, re: adv && advRegex.checked };
+  const o = { text: findInput.value, adv, mc: adv && advCase.checked, ww: adv && advWord.checked, re: adv && advRegex.checked, wc: adv && !advRegex.checked && advWild.checked };
   const key = JSON.stringify(o);
   if (matcherCache.key === key) return matcherCache.value;
   let value = null;
   if (o.text) {
-    let source = o.re ? o.text : (adv ? splitTerms(o.text) : [o.text]).map(escapeRegExp).join('|');
+    let source = o.re ? o.text : (adv ? splitTerms(o.text) : [o.text]).map(o.wc ? wildcardSource : escapeRegExp).filter(Boolean).join('|');
     if (source) {
       if (o.ww) source = '\\b(?:' + source + ')\\b';
       try {
@@ -301,7 +317,7 @@ let lastRangeInfo = { error: null, desc: '', note: '' };
 
 function computeRows() {
   const m = buildMatcher();
-  const hide = splitTerms(advHide.value).map((t) => t.toLowerCase());
+  const hide = hideMatchers();
   const rows = [];
   let total = 0;
   lastRangeInfo = { error: null, desc: '', note: '' };
@@ -329,7 +345,7 @@ function computeRows() {
       if (ok && matchLines && !matchLines.has(i)) ok = false;
       if (ok && hide.length) {
         const low = c.lines[i].toLowerCase();
-        if (hide.some((h) => low.includes(h))) ok = false;
+        if (hide.some((h) => (h.re ? h.re.test(low) : low.includes(h)))) ok = false;
       }
       // "Add Bookmarks" (as in the Timeline): bookmarked lines are always listed.
       if (!ok && findState.addBookmarks && bms[i]) ok = true;
@@ -565,7 +581,7 @@ function scrollEditorToOffset(pos) {
     editor.scrollTop = Math.max(0, y - editor.clientHeight / 3);
   }
   editorHighlight.scrollTop = editor.scrollTop;
-  if (lineNumbersVisible) lineNumbersEl.scrollTop = editor.scrollTop;
+  if (lineNumbersVisible) renderGutter();
 }
 
 function scrollPreviewToOffset(doc, pos) {
@@ -610,12 +626,12 @@ function bookmarksChanged() {
   }
 }
 
-/** Ctrl+Shift+B in the grid: bookmark (green) the selection, or remove if every selected row already is one. */
+/** Ctrl+Shift+B in the grid: bookmark the selection (current bookmark colour), or remove if every selected row already is one. */
 function toggleSelectedBookmarks() {
   const rows = selectedRows();
   if (!rows.length) return;
   const all = rows.every((r) => bookmarkOf(r.doc, r.line));
-  setRowsBookmark(rows, all ? null : 'Green');
+  setRowsBookmark(rows, all ? null : settings.bookmarkColour);
 }
 
 function setRowsBookmark(rows, colour) {
@@ -644,7 +660,106 @@ function toggleBookmarkAtCaret() {
   const doc = getActive();
   if (!doc) return;
   const line = caretLine(doc);
-  setBookmarks(doc, [line], bookmarkOf(doc, line) ? null : 'Green');
+  setBookmarks(doc, [line], bookmarkOf(doc, line) ? null : settings.bookmarkColour);
+}
+
+/** Right-click in the bookmark margin: the colour picked also becomes the one a click gives. */
+function showBookmarkMarginMenu(x, y, doc, line) {
+  const cur = bookmarkOf(doc, line);
+  const items = [{ label: 'LINE ' + fmtCount(line + 1), header: true }];
+  for (const col of BOOKMARK_COLOURS) {
+    items.push({
+      label: col,
+      dot: col.toLowerCase(),
+      checked: cur === col,
+      gesture: col === settings.bookmarkColour ? 'Click' : '',
+      action: () => {
+        setBookmarkColour(col);
+        setBookmarks(doc, [line], col);
+      },
+    });
+  }
+  items.push('sep');
+  items.push({ label: 'Remove bookmark', icon: '✕', disabled: !cur, action: () => setBookmarks(doc, [line], null) });
+  items.push({ label: 'Clear all bookmarks in this tab…', icon: '⌫', disabled: !Object.keys(doc.bookmarks || {}).length, action: () => clearAllBookmarks(doc) });
+  showContextMenu(x, y, items);
+}
+
+/**
+ * Search > Bookmark: cut, copy, paste to (replace), remove, remove the others, inverse.
+ * Every change to the text is one undo step; bookmarks follow their lines.
+ */
+async function bookmarkedLinesAction(kind) {
+  const doc = getActive();
+  if (!doc) return;
+  const c = lineIndex(doc);
+  const lines = c.lines;
+  const n = lines.length;
+  const bms = doc.bookmarks || {};
+  if (kind === 'inverse') {
+    const out = {};
+    for (let i = 0; i < n; i++) if (!bms[i]) out[i] = settings.bookmarkColour;
+    doc.bookmarks = out;
+    bookmarksChanged();
+    flashFindStatus(fmtCount(Object.keys(out).length) + ' line(s) bookmarked.');
+    return;
+  }
+  const marked = Object.keys(bms).map(Number).filter((l) => l < n).sort((a, b) => a - b);
+  if (!marked.length) {
+    flashFindStatus('No bookmarks in this tab. Click in the margin beside a line number, or press Ctrl+F2, to bookmark a line.');
+    return;
+  }
+  const isMarked = new Set(marked);
+  const eol = doc.eol === 'crlf' ? '\r\n' : '\n';
+  if (kind === 'copy' || kind === 'cut') {
+    await clipboard.writeText(marked.map((l) => lines[l] + eol).join(''));
+    if (kind === 'copy') {
+      flashFindStatus('Copied ' + fmtCount(marked.length) + ' bookmarked line(s).');
+      return;
+    }
+  }
+  let clip = '';
+  if (kind === 'paste') {
+    try {
+      clip = ((await clipboard.readText()) || '').replace(/\r\n?/g, '\n');
+    } catch (e) {
+      clip = '';
+    }
+  }
+  const outLines = [];
+  const outBms = {};
+  for (let i = 0; i < n; i++) {
+    if (kind === 'paste' && isMarked.has(i)) {
+      outBms[outLines.length] = bms[i];
+      outLines.push(...clip.split('\n'));
+    } else if ((kind === 'cut' || kind === 'remove') && isMarked.has(i)) {
+      continue;
+    } else if (kind === 'remove-others' && !isMarked.has(i)) {
+      continue;
+    } else {
+      if (bms[i]) outBms[outLines.length] = bms[i];
+      outLines.push(lines[i]);
+    }
+  }
+  const oldText = doc.content;
+  const newText = outLines.join('\n');
+  if (newText !== oldText) {
+    // Replace only the part that changed, as one edit (one undo step).
+    let p = 0;
+    const min = Math.min(oldText.length, newText.length);
+    while (p < min && oldText.charCodeAt(p) === newText.charCodeAt(p)) p++;
+    let so = oldText.length;
+    let sn = newText.length;
+    while (so > p && sn > p && oldText.charCodeAt(so - 1) === newText.charCodeAt(sn - 1)) {
+      so--;
+      sn--;
+    }
+    applyEdit(doc, p, so, newText.slice(p, sn));
+  }
+  doc.bookmarks = outBms;
+  bookmarksChanged();
+  const what = { cut: 'Cut', paste: 'Replaced', remove: 'Removed', 'remove-others': 'Kept' }[kind];
+  flashFindStatus(what + ' ' + fmtCount(marked.length) + ' bookmarked line(s)' + (kind === 'remove-others' ? ' and removed the rest.' : '.'));
 }
 
 /** F2 / Shift+F2 in the editor: jump to the next/previous bookmarked line (wrapping). */
@@ -823,11 +938,15 @@ function editorDecorations(doc) {
 /* ---------- find bar ---------- */
 
 let flashTimer = 0;
-function flashFindStatus(text) {
+function flashFindStatus(text, ms = 3000) {
   if (findBar.classList.contains('hidden')) {
     statusDirty.textContent = text;
+    statusDirty.title = text;
     clearTimeout(flashTimer);
-    flashTimer = setTimeout(updateStatusBar, 3000);
+    flashTimer = setTimeout(() => {
+      statusDirty.title = '';
+      updateStatusBar();
+    }, ms);
   } else {
     findStatus.textContent = text;
   }
@@ -1139,7 +1258,7 @@ function showRowMenu(x, y, rowEl, col) {
     label: common ? 'Bookmark  ·  ' + common : 'Bookmark',
     icon: '⚑',
     submenu: [
-      ...BOOKMARK_COLOURS.map((col2) => ({ label: col2, dot: col2.toLowerCase(), checked: common === col2, gesture: col2 === 'Green' ? 'Ctrl+Shift+B' : '', action: () => setRowsBookmark(rows, col2) })),
+      ...BOOKMARK_COLOURS.map((col2) => ({ label: col2, dot: col2.toLowerCase(), checked: common === col2, gesture: col2 === settings.bookmarkColour ? 'Ctrl+Shift+B' : '', action: () => { setBookmarkColour(col2); setRowsBookmark(rows, col2); } })),
       'sep',
       { label: many ? 'Remove bookmarks from selection' : 'Remove bookmark', icon: '✕', disabled: !many && !common, action: () => setRowsBookmark(rows, null) },
       { label: 'Clear all bookmarks in this file…', icon: '⌫', disabled: !Object.keys(r.doc.bookmarks || {}).length, action: () => clearAllBookmarks(r.doc) },
@@ -1231,6 +1350,7 @@ function captureFindState() {
     matchCase: advCase.checked,
     wholeWord: advWord.checked,
     regex: advRegex.checked,
+    wildcard: advWild.checked,
     scope: advScope.value,
     addBookmarks: findState.addBookmarks,
     paneHeight: findState.paneHeight,
@@ -1251,6 +1371,7 @@ function restoreFindState(s) {
   advCase.checked = !!s.matchCase;
   advWord.checked = !!s.wholeWord;
   advRegex.checked = !!s.regex;
+  advWild.checked = !s.regex && !!s.wildcard;
   advScope.value = s.scope === 'all' ? 'all' : 'tab';
   findState.addBookmarks = !!s.addBookmarks;
   advAddBm.checked = findState.addBookmarks;
@@ -1288,10 +1409,13 @@ function wireFind() {
       scheduleSessionSave();
     })
   );
-  [advCase, advWord, advRegex, advScope].forEach((el) =>
+  [advCase, advWord, advRegex, advWild, advScope].forEach((el) =>
     el.addEventListener('change', () => {
+      // Regex and Wildcard are either/or.
+      if (el === advRegex && advRegex.checked) advWild.checked = false;
+      if (el === advWild && advWild.checked) advRegex.checked = false;
       matcherCache.key = null;
-      advFind.placeholder = advRegex.checked ? 'regular expression' : 'term, term, ...';
+      advFind.placeholder = advRegex.checked ? 'regular expression' : advWild.checked ? 'term*, *term, ...' : 'term, term, ...';
       refreshFind(false);
       scheduleSessionSave();
     })
@@ -1385,6 +1509,12 @@ function wireFind() {
       return;
     }
     if (e.button !== 0) return;
+    // The first click redraws the rows, so the browser never sends a dblclick: catch the second press here.
+    if (e.detail === 2 && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault(); // don't select a word
+      onRowDoubleClick(e, rowEl);
+      return;
+    }
     if (e.shiftKey && findState.anchor >= 0) selectRange(findState.anchor, i, e.ctrlKey);
     else if (e.ctrlKey || e.metaKey) {
       if (findState.selected.has(key)) findState.selected.delete(key);
@@ -1396,10 +1526,27 @@ function wireFind() {
     renderGrid();
     if (!e.shiftKey && !e.ctrlKey) revealRow(i, false);
   });
-  advRows.addEventListener('dblclick', (e) => {
-    const rowEl = e.target.closest('.adv-row');
-    if (rowEl) revealRow(Number(rowEl.dataset.i), true);
-  });
+  // Double-click: on the Time or Text cell, copy that cell; elsewhere, go and edit there.
+  const onRowDoubleClick = (e, rowEl) => {
+    const i = Number(rowEl.dataset.i);
+    const r = findState.rows[i];
+    const cellEl = e.target.closest('.c');
+    const col = cellEl ? (cellEl.className.match(/c-(line|time|file|text)/) || [])[1] : null;
+    if (r && (col === 'time' || col === 'text')) {
+      const c = lineTimes(r.doc);
+      const value = col === 'time' ? c.stamps[r.line] || '' : c.lines[r.line];
+      const sel = window.getSelection();
+      if (sel) sel.removeAllRanges(); // the double-click selected a word
+      if (!value) {
+        advStatus.textContent = 'This line has no time to copy.';
+        return;
+      }
+      clipboard.writeText(value);
+      advStatus.textContent = 'Copied the ' + (col === 'time' ? 'time ' + value : 'text of line ' + fmtCount(r.line + 1)) + ' to the clipboard.';
+      return;
+    }
+    revealRow(i, true);
+  };
   advRows.addEventListener('contextmenu', (e) => {
     const rowEl = e.target.closest('.adv-row');
     if (!rowEl) return;

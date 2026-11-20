@@ -47,10 +47,15 @@ Send-Key @('CTRL', 'SHIFT') 'E' 'KeyE' 0x45
 T 'Ctrl+Shift+E shows it again' (J "return sidebarEl.offsetWidth") ([int](J "return sidebarEl.offsetWidth") -gt 20)
 $m0 = MenuShown
 AltTap; Start-Sleep -Milliseconds 400
-$m1 = MenuShown; $s1 = J "return settings.menuBar"
-AltTap; Start-Sleep -Milliseconds 400
+$m1 = MenuShown
+J "changeSetting('menuBar', false); return 1" | Out-Null; Start-Sleep -Milliseconds 400
 $m2 = MenuShown
-T 'Alt on its own hides / shows the menu bar' "start=$m0 afterAlt=$m1 (setting $s1) afterAlt2=$m2" ($m0 -and -not $m1 -and $s1 -eq $false -and $m2)
+AltTap; Start-Sleep -Milliseconds 400
+$m3 = MenuShown; $s3 = J "return settings.menuBar"
+AltTap; Start-Sleep -Milliseconds 400
+$m4 = MenuShown
+J "changeSetting('menuBar', true); return 1" | Out-Null; Start-Sleep -Milliseconds 400
+T 'Alt shows a hidden menu bar for now, Alt again hides it' "on=$m0 afterAlt=$m1 off=$m2 peek=$m3 (setting $s3) afterAlt2=$m4" ($m0 -and $m1 -and -not $m2 -and $m3 -and $s3 -eq $false -and -not $m4)
 Send-Key @('ALT') 'z' 'KeyZ' 0x5A
 T 'Alt+Z does not toggle the menu bar' "menu=$(MenuShown) wrap=$(J 'return settings.wordWrap')" ((MenuShown) -and (J 'return settings.wordWrap') -eq $true)
 Send-Key @('ALT') 'z' 'KeyZ' 0x5A   # wrap back off for the persistence test

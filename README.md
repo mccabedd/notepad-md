@@ -32,10 +32,12 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 - **Per-tab preview mode / language** — the `MD` / `BB` button in the sidebar flips a tab between a Markdown and a BBCode preview (`Ctrl+Alt+M` / `Ctrl+Alt+B`, or View > Preview as…). **View > Language** lists every language (the current one is ticked): pick one to colour the tab that way — e.g. type HTML into a new tab and choose *HTML* — or go back to *Auto-detect from File Extension*. Clicking the language in the status bar does the same. Choosing a code language while in Preview Only switches the tab to Edit Only. The choice is remembered per tab.
 - **Per-tab font size** — `Ctrl`+mouse wheel, `Ctrl++` / `Ctrl+-`, `Ctrl+0` to reset (or click the % in the status bar).
 - **Word wrap** on/off (`Alt+Z`, View menu).
-- Show/hide the **menu bar** (tap `Alt`), **sidebar** (`Ctrl+Shift+E`), **toolbar** (`Ctrl+T`) and **status bar** (View menu).
+- Show/hide the **menu bar** (View menu; while it is hidden, tap `Alt` to show it until you pick a command), **sidebar** (`Ctrl+Shift+E`), **toolbar** (`Ctrl+T`) and **status bar** (View menu).
 - Light / dark theme (`Ctrl+Shift+D`) or follow Windows.
 - The **View** menu shows a tick next to whatever is on (toolbar, outline, word wrap, line numbers, follow file, current layout, preview mode, spelling, dark theme). Menus: File, Edit, View, Search, About.
-- Line numbers (`Ctrl+Shift+L`) beside the editor (not the preview); bookmarked lines are shown in their bookmark colour. The column widens for 5- and 6-digit line numbers.
+- Line numbers (`Ctrl+Shift+L`) beside the editor (not the preview); they stay beside their line when word wrap folds a long line, and the column widens for 5- and 6-digit line numbers. Click a number to select that line.
+- **Bookmark margin** to the right of the line numbers: click it to bookmark a line (or click the dot to remove it), right-click it to choose Green, Orange or Red. The colour you choose is used for the next clicks and for `Ctrl+F2`. Bookmarks show in the same colours in the editor, the margin and the Advanced pane, whichever way they were made.
+- **Show Hidden Characters** (`Ctrl+Shift+H`, View menu): dots for spaces, arrows for tabs, a red tint on spaces and tabs at the end of a line, each line's ending (CRLF or LF), a BOM marker, and a red marker with the code for characters you can't normally see (zero-width spaces, control characters); look-alike spaces such as the no-break space get an orange dot. Switching it on also reports in the status bar what the file contains, e.g. `1 × zero-width space (U+200B, first: line 4)`.
 - **Outline** (`Ctrl+Shift+O`, View menu) — a panel on the left listing the headings of a Markdown document; click one to jump to it. It follows your typing and highlights the section you are in.
 - **Go to Line** (`Ctrl+G`, Edit menu).
 
@@ -58,14 +60,14 @@ Built with [Tauri](https://tauri.app) (Rust backend + the OS's built-in WebView2
 ### Find, Advanced find and bookmarks
 - **Find bar at the bottom** (`Ctrl+F`): Find, Replace, ↑ / ↓ (`Shift+F3` / `F3`), Replace, Replace All, and an **Advanced** checkbox (`Ctrl+Shift+F`). All matches are highlighted in the editor and preview.
 - **Advanced pane** — a resizable list of lines, modelled on the Noxturnal Monitoring Tool's Timeline:
-  - Filters: **From / To** (line numbers like `120` / `#120`, or times like `14:30`, `2024-10-14 14:30:05`, `20241014`; inclusive to the precision typed; lines without a timestamp inherit the previous one), **Find** (comma-separated terms, any of them), **Hide** (comma-separated terms to exclude), Match case, Whole word, Regex, and *This tab* / *All open tabs*.
+  - Filters: **From / To** (line numbers like `120` / `#120`, or times like `14:30`, `2024-10-14 14:30:05`, `20241014`; inclusive to the precision typed; lines without a timestamp inherit the previous one), **Find** (comma-separated terms, any of them), **Hide** (comma-separated terms to exclude), Match case, Whole word, Regex, **Wildcard** (`*` stands for any characters within a line, e.g. `error*timeout`; Regex and Wildcard are either/or), and *This tab* / *All open tabs*.
   - Columns: Line #, Time (detected timestamps), File (all-tabs mode), Text — click a header to sort, drag a header edge to resize.
-  - Click a row to jump to that line (double-click / `Enter` to start editing there); `Shift`/`Ctrl`+click and arrow keys select.
+  - Click a row to jump to that line; double-click a **Time** cell to copy the time, or a **Text** cell to copy the line's text (double-click the line number, or press `Enter`, to start editing there); `Shift`/`Ctrl`+click and arrow keys select.
   - Right-click menu: Bookmark (Green / Orange / Red, remove, clear all in file), Remove from the list, Copy cell / lines / line numbers / table, Show from here, Show up to here, Filter by (show only / hide rows containing this), Go to line, Select all.
   - Keys: `Ctrl+Shift+B` bookmark / remove bookmark, `Delete` remove from list, `Ctrl+C` / `Ctrl+Shift+C` copy lines / line numbers, `Ctrl+A` select all.
   - **Add Bookmarks** checkbox always lists bookmarked lines; **Previous / Next** move between blocks of bookmarked lines; **Reset** clears filters and brings back removed rows; **Maximize** makes the list fill the window; **✕** closes the pane.
   - Replace All in Advanced mode only changes the listed lines.
-- **Bookmarks in the editor** — `Ctrl+F2` toggle, `F2` / `Shift+F2` next / previous. Bookmarks follow their text when lines are inserted or deleted above them, and are saved with the session.
+- **Bookmarks in the editor** — click the margin beside a line number, or `Ctrl+F2` to toggle, `F2` / `Shift+F2` next / previous. **Search > Bookmark** also has Clear All Bookmarks, Bookmark Colour, Cut / Copy Bookmarked Lines, Paste to (Replace) Bookmarked Lines, Remove Bookmarked Lines, Remove Non-Bookmarked Lines and Inverse Bookmarks (each change is one undo step). Bookmarks follow their text when lines are inserted or deleted above them, and are saved with the session.
 
 ### Settings (`Ctrl+,` or File > Settings)
 Theme; use the Windows accent colour (on by default; links, selected items and buttons follow your Windows colour); reopen tabs on start; menu bar / toolbar / sidebar / status bar; outline panel; tab header font size; line numbers; word wrap; auto-close brackets and quotes; tab width; editor font, size, style (regular/bold/italic), text colour and background; preview font, size, style, text colour and background ("Use theme" returns a colour to the light/dark theme); default view for new tabs (each tab can still be zoomed with Ctrl+wheel; Ctrl+0 goes back to the editor and preview sizes); spell checking and language; Reset to defaults.
@@ -131,3 +133,19 @@ NotePad-MD is released under the [MIT licence](LICENSE). The bundled third-party
 - [highlight.js](https://highlightjs.org) 11.9.0 (BSD-3-Clause) — syntax colouring
 - [Typo.js](https://github.com/cfinke/Typo.js) 1.2.4 (BSD-3-Clause) — Hunspell-compatible spellchecker
 - en-GB / en-US Hunspell dictionaries from [SCOWL / wordlist.sourceforge.net](http://wordlist.sourceforge.net), via the `dictionary-en` and `dictionary-en-gb` packages (permissive SCOWL licence)
+
+## Project status and support
+
+NotePad-MD was created and reviewed with AI assistance.
+
+Its source code was written for this project and does not copy source code from other applications. The third-party components it bundles are used under their own licences (listed above), and its icons and artwork were drawn for this project.
+
+The repository and release files are provided **as is**.
+
+Issues and pull requests are not actively monitored, so individual troubleshooting and support cannot be guaranteed.
+
+Forks and adaptations are welcome. If you reuse the project, please keep the attribution or otherwise acknowledge the original project.
+
+## Acknowledgements
+
+Thanks to Notepad++ and Obsidian for the inspiration.

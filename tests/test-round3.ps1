@@ -227,7 +227,7 @@ editor.setSelectionRange(lineIndex(getActive()).starts[6], lineIndex(getActive()
 document.dispatchEvent(new KeyboardEvent('keydown',{key:'F2',ctrlKey:true,bubbles:true}));
 return l1 + ',' + l2 + '|' + JSON.stringify(getActive().bookmarks);
 "@
-T 'F2 / Shift+F2 jump between bookmarks, Ctrl+F2 toggles' $r ($r -eq '2,8|{"1":"Red","2":"Red","3":"Green","6":"Green","7":"Orange"}')
+T 'F2 / Shift+F2 jump between bookmarks, Ctrl+F2 toggles' $r ($r -eq '2,8|{"1":"Red","2":"Red","3":"Green","6":"Orange","7":"Orange"}') # Ctrl+F2 uses the colour last picked (Orange, above)
 
 # Replace All in Advanced mode only touches listed lines
 $r = J @"

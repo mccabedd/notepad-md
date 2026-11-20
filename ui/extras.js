@@ -116,7 +116,7 @@ async function reloadFromDisk(doc, opts = {}) {
         preview.scrollTop = pAtEnd ? preview.scrollHeight : ptop;
       }
       editorHighlight.scrollTop = editor.scrollTop;
-      if (lineNumbersVisible) lineNumbersEl.scrollTop = editor.scrollTop;
+      if (lineNumbersVisible) renderGutter();
     }
   } else {
     if (changed) {
@@ -727,7 +727,7 @@ function gotoHeading(i) {
     }
     editor.scrollTop = Math.max(0, y - 8);
     editorHighlight.scrollTop = editor.scrollTop;
-    if (lineNumbersVisible) lineNumbersEl.scrollTop = editor.scrollTop;
+    if (lineNumbersVisible) renderGutter();
   }
   if (previewVisible()) {
     const el = preview.querySelectorAll('h1, h2, h3, h4, h5, h6')[i];
@@ -951,7 +951,7 @@ function renderLargeOverlay(doc, text, info) {
   // Find hits and bookmarks are drawn too (on the colours if this text is already coloured,
   // otherwise on plain text). Only changed lines are redrawn, so this stays quick.
   const decos = doc && text === doc.content && text.length <= LAZY_HIGHLIGHT_MAX ? editorDecorations(doc) : [];
-  if (decos.length) {
+  if (decos.length || (doc && overlayNeedsLines() && text.length <= LAZY_HIGHLIGHT_MAX)) {
     clearTimeout(lazyTimer);
     if (lazyShown) {
       editorHighlight.replaceChildren();
@@ -1025,7 +1025,7 @@ async function colourLargeDoc(doc) {
   if (html === null) html = highlightCode(text, info.hljs); // a language only the page knows (BBCode)
   if (/(^|\n)[ \t]/.test(text)) html = addIndentGuides(html);
   doc.hlCache = { text, lang: info.hljs, html };
-  if (editorDecorations(doc).length) renderEditorOverlay(); // keep find hits / bookmarks on top
+  if (editorDecorations(doc).length || overlayNeedsLines()) renderEditorOverlay(); // keep find hits / bookmarks / line blocks
   else showLargeOverlay(doc, text, info.hljs, html);
 }
 
